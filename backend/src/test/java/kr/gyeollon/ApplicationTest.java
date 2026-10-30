@@ -6,10 +6,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 @SpringBootTest @AutoConfigureMockMvc class ApplicationTest {
  @Autowired MockMvc mvc;
  String valid="{\"latitude\":37.5665,\"longitude\":126.978,\"availableMinutes\":180,\"scenery\":\"forest\",\"vehicleType\":\"ev\"}";
+ @Test void servesAssetsAndApiUnderContextPath() throws Exception {
+  mvc.perform(get("/flowad/").contextPath("/flowad")).andExpect(status().isOk()).andExpect(forwardedUrl("/index.html"));
+  mvc.perform(get("/flowad/app.js").contextPath("/flowad")).andExpect(status().isOk());
+  mvc.perform(post("/flowad/api/recommendations").contextPath("/flowad").contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isOk());
+ }
  @Test void normal() throws Exception { mvc.perform(post("/api/recommendations").contentType(MediaType.APPLICATION_JSON).content(valid)).andExpect(status().isOk()).andExpect(jsonPath("$.courses[0].distanceTimeStatus").value("ESTIMATED_NOT_ROAD_ROUTED")).andExpect(jsonPath("$.courses[0].batteryStatus").value("ROAD_ROUTE_REQUIRED")).andExpect(jsonPath("$.courses[0].dataSource.generatedAt").exists()); }
  @Test void invalidAndMissing() throws Exception { for(String body:new String[]{valid.replace("37.5665","91"),"{}",valid.replace("126.978","181")}) mvc.perform(post("/api/recommendations").contentType(MediaType.APPLICATION_JSON).content(body)).andExpect(status().isBadRequest()); }
  @Test void locationAffectsResults() throws Exception {

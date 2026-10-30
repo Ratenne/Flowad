@@ -1,10 +1,10 @@
-import * as THREE from '/assets/three.module.js';
-import {makeTerrainModel,makeLatestTerrainLoader,elevationAt} from '/terrain-model.js';
+import * as THREE from './assets/three.module.js';
+import {makeTerrainModel,makeLatestTerrainLoader,elevationAt} from './terrain-model.js';
 const safe=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const p=(x,y,z)=>new THREE.Vector3(x,y,z);
 const mix=(a,b,t)=>a.clone().lerp(b,Math.max(0,Math.min(1,t)));
 const low=new THREE.Color('#405d48'),high=new THREE.Color('#a0a58a'),water=new THREE.Color('#426e78');
-const cacheFetch=id=>fetch('/terrain/'+encodeURIComponent(id)+'.json').then(r=>{if(!r.ok)throw new Error('지형 데이터를 불러오지 못했어요.');return r.json()});
+const cacheFetch=id=>fetch('./terrain/'+encodeURIComponent(id)+'.json').then(r=>{if(!r.ok)throw new Error('지형 데이터를 불러오지 못했어요.');return r.json()});
 export function createTerrainView({canvas,host,labelLayer,onStatus=()=>{},isInteractive=()=>true,fetcher=cacheFetch}){
  let gpu=true,renderer,ctx;try{renderer=new THREE.WebGLRenderer({canvas,alpha:true,antialias:true,powerPreference:'low-power'});renderer.setPixelRatio(Math.min(devicePixelRatio,1.7));renderer.setClearColor(0x000000,0);renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.22}catch(e){gpu=false;const fresh=document.createElement('canvas');fresh.id=canvas.id;fresh.setAttribute('aria-label','실제 고도 데이터로 표시하는 코스 주변 3D 지형');canvas.replaceWith(fresh);canvas=fresh;ctx=canvas.getContext('2d');if(!ctx)throw new Error('지형 화면을 지원하지 않는 환경입니다.')}
  canvas.tabIndex=isInteractive()?0:-1;canvas.setAttribute('aria-label','선택 코스 주변의 실제 고도 데이터 기반 3D 지형. 드래그 또는 방향키로 회전.');

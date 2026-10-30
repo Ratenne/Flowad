@@ -1,0 +1,12 @@
+.git
+.m2
+backend/target
+pleos-android
+.openai
+.env*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore

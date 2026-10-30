@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 """Probe fixed public landmarks, never a user's coordinates."""
-import argparse,json,time,urllib.request,urllib.error
+import argparse,json,time,urllib.request,urllib.error,ssl
+try:
+ import certifi
+ tls=ssl.create_default_context(cafile=certifi.where())
+except ImportError:
+ tls=ssl.create_default_context()
 from pathlib import Path
 p=argparse.ArgumentParser();p.add_argument('base_url');p.add_argument('--output',default='artifacts/roads/probe.json');a=p.parse_args()
 cases={
@@ -14,7 +19,7 @@ results=[]
 for name,xy in cases.items():
  url=a.base_url.rstrip('/')+'/route/v1/driving/'+xy+'?steps=true&geometries=geojson&overview=false'
  started=time.monotonic()
- with urllib.request.urlopen(url,timeout=180) as r: data=json.load(r)
+ with urllib.request.urlopen(url,timeout=180,context=tls) as r: data=json.load(r)
  route=data.get('routes',[{}])[0];legs=route.get('legs',[])
  assert data.get('code')=='Ok',(name,data.get('code'))
  assert len(legs)==xy.count(';'),name
@@ -23,7 +28,7 @@ for name,xy in cases.items():
  results.append(result);print(json.dumps(result),flush=True)
 for name,xy in [('invalid_latitude','127,91;127,37'),('waypoint_limit',';'.join(['127,37']*21))]:
  try:
-  urllib.request.urlopen(a.base_url.rstrip('/')+'/route/v1/driving/'+xy,timeout=30)
+  urllib.request.urlopen(a.base_url.rstrip('/')+'/route/v1/driving/'+xy,timeout=30,context=tls)
   raise AssertionError(name+' was accepted')
  except urllib.error.HTTPError as e:
   assert e.code==400,(name,e.code)

@@ -1,0 +1,115 @@
+{
+  "version": 1,
+  "courses": [
+    {
+      "id": "busan-coast",
+      "file": "busan-coast.json",
+      "sha256": "cb1e68f7695eb6b16999b15edc462ac9b7d3f26d84710ff85c9e9327ee7fbad9",
+      "elevationRange": [
+        0.0,
+        552.8
+      ],
+      "roadKm": 9.1,
+      "waterAvailable": false
+    },
+    {
+      "id": "busan-forest",
+      "file": "busan-forest.json",
+      "sha256": "8ef6ccfb8f27cdb08d4266153a1edd04ecd290b67f2d2220f97caf299ba1d93b",
+      "elevationRange": [
+        2.7,
+        917.6
+      ],
+      "roadKm": 20.2,
+      "waterAvailable": false
+    },
+    {
+      "id": "busan-open",
+      "file": "busan-open.json",
+      "sha256": "2296624f0451e42a0b47e4defcc2cfeac5c7e3074ee5586d941655bd59803c6a",
+      "elevationRange": [
+        -1.0,
+        683.8
+      ],
+      "roadKm": 19.1,
+      "waterAvailable": false
+    },
+    {
+      "id": "daegwallyeong",
+      "file": "daegwallyeong.json",
+      "sha256": "e578d0e68413e3267bbdcddb462b07f167d85c8970e8d8b5703593e494a3855b",
+      "elevationRange": [
+        88.9,
+        1151.5
+      ],
+      "roadKm": 22.4,
+      "waterAvailable": false
+    },
+    {
+      "id": "gangneung-coast",
+      "file": "gangneung-coast.json",
+      "sha256": "a46938ed250d13e4a349db4ec4ed491d914a72e3a3d88a51ddf26d73b0993eac",
+      "elevationRange": [
+        0.0,
+        108.0
+      ],
+      "roadKm": 6.3,
+      "waterAvailable": false
+    },
+    {
+      "id": "gangneung-forest",
+      "file": "gangneung-forest.json",
+      "sha256": "1974eac9a3113fbdf36af8a93532167560cc3c8c8bfae32576b3fd4ecf53a63a",
+      "elevationRange": [
+        0.0,
+        81.0
+      ],
+      "roadKm": 5.4,
+      "waterAvailable": false
+    },
+    {
+      "id": "gapyeong",
+      "file": "gapyeong.json",
+      "sha256": "497c2dcc62493f3cfaacf7c23caee3a2c14522829878cb641041f1823069b2d0",
+      "elevationRange": [
+        25.0,
+        688.4
+      ],
+      "roadKm": 25.4,
+      "waterAvailable": false
+    },
+    {
+      "id": "paju",
+      "file": "paju.json",
+      "sha256": "5e62beeb8cb9f9bfe0164fc46bf35d10e072293d606d194b68fac71985650edb",
+      "elevationRange": [
+        1.5,
+        144.2
+      ],
+      "roadKm": 11.9,
+      "waterAvailable": false
+    },
+    {
+      "id": "siheung",
+      "file": "siheung.json",
+      "sha256": "3e36bc906b272e412e5b922770d1d4c730a75961bd1d00611289e6d49d709778",
+      "elevationRange": [
+        0.0,
+        221.2
+      ],
+      "roadKm": 23.1,
+      "waterAvailable": false
+    },
+    {
+      "id": "yangpyeong",
+      "file": "yangpyeong.json",
+      "sha256": "22912ee03fc3d25b2eed34b4d7fb37302b06e841406e4b39ead6e680d577b527",
+      "elevationRange": [
+        24.0,
+        632.3
+      ],
+      "roadKm": 18.9,
+      "waterAvailable": false
+    }
+  ]
+}

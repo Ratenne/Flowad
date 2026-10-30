@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+const code=fs.readFileSync(new URL('../dist/battery.js',import.meta.url),'utf8');
+const {assessBattery}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const now=Date.now(), input={routeStatus:'ROAD_ROUTED',distanceKm:100,batteryPercent:60,remainingRangeKm:250,reservePercent:15,observedAt:now,now};
+assert.equal(assessBattery({...input,routeStatus:'ESTIMATED_NOT_ROAD_ROUTED'}).status,'ROAD_ROUTE_REQUIRED');
+assert.equal(assessBattery(input).status,'ESTIMATED_SUFFICIENT');
+assert.equal(assessBattery({...input,distanceKm:200}).status,'CHARGING_MAY_BE_NEEDED');
+assert.equal(assessBattery({...input,remainingRangeKm:null}).status,'INSUFFICIENT_INPUT');
+assert.equal(assessBattery({...input,observedAt:now-16*60*1000}).status,'STALE_DATA');
+console.log('PASS: road-only battery assessment, reserve, missing and stale inputs.');

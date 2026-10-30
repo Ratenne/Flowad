@@ -15,5 +15,7 @@ RUN osrm-extract --threads 2 -p /opt/car.lua korea.osm.pbf \
 
 FROM ghcr.io/project-osrm/osrm-backend:v5.27.1
 COPY --from=map /data /data
+COPY deploy/osrm/start.sh /start.sh
 EXPOSE 10000
-CMD ["/bin/sh", "-c", "exec osrm-routed --algorithm mld --mmap=1 --verbosity WARNING --threads 1 --port ${PORT:-10000} --max-viaroute-size 20 --max-table-size 2 --max-matching-size 2 --max-trip-size 2 --max-nearest-size 1 /data/korea.osrm"]
+ENTRYPOINT ["/bin/sh", "/start.sh"]
+CMD []

@@ -13,7 +13,7 @@
 JDK 17 및 Maven 필요. PowerShell에서:
 
 ```powershell
-cd C:\Users\user\Documents\ChatGPT\flowad\gyeollon\backend
+cd C:\Users\user\Documents\ChatGPT\flowad\backend
 mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081 --server.address=127.0.0.1"
 ```
 
@@ -54,7 +54,7 @@ Android 초안은 빌드·실행 미검증이다. 현재 에뮬레이터의 문 
 ## 테스트
 
 ```powershell
-cd C:\Users\user\Documents\ChatGPT\flowad\gyeollon
+cd C:\Users\user\Documents\ChatGPT\flowad
 mvn -f backend/pom.xml test
 node scripts/test-engine.mjs
 node scripts/test-terrain.mjs
@@ -72,7 +72,7 @@ $env:SERVER_SSL_KEY_STORE = Read-Host 'PKCS12 key store path'
 $env:SERVER_SSL_KEY_STORE_TYPE = 'PKCS12'
 $env:SERVER_SSL_KEY_STORE_PASSWORD = [System.Net.NetworkCredential]::new('', (Read-Host 'Key store password' -AsSecureString)).Password
 # 앞 절의 TESLA_CLIENT_ID, TESLA_CLIENT_SECRET, TESLA_REDIRECT_URI도 이 창에서 설정
-cd C:\Users\user\Documents\ChatGPT\flowad\gyeollon\backend
+cd C:\Users\user\Documents\ChatGPT\flowad\backend
 mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8443"
 ```
 

@@ -18,7 +18,7 @@ public class Application implements WebMvcConfigurer {
     public Application(ObjectMapper mapper, Routing routing) throws Exception { courses = mapper.readTree(getClass().getResourceAsStream("/courses.json")); this.routing=routing; }
     @org.springframework.context.annotation.Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(Routing.RoadProvider.class)
-    static Routing.RoadProvider defaultRoadProvider(){return new Routing.MockProvider();}
+    static Routing.RoadProvider defaultRoadProvider(ObjectMapper mapper, @org.springframework.beans.factory.annotation.Value("${ROAD_ROUTING_URL:}") String url){return url.isBlank()?new Routing.MockProvider():new OsrmRoadProvider(mapper,url);}
     public static void main(String[] args) { SpringApplication.run(Application.class,args); }
     @Override public void addResourceHandlers(ResourceHandlerRegistry r) { r.addResourceHandler("/**").addResourceLocations("file:../dist/", "file:dist/"); }
     @GetMapping("/") public org.springframework.web.servlet.ModelAndView index() { return new org.springframework.web.servlet.ModelAndView("forward:/index.html"); }

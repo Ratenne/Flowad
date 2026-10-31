@@ -16,7 +16,7 @@ public class TeslaIntegration {
  public static final String AUTHORIZE="https://auth.tesla.com/oauth2/v3/authorize";
  public static final String TOKEN="https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token";
  static final String SCOPE="openid offline_access vehicle_device_data";
- public interface Gateway { JsonNode token(Map<String,String> fields) throws Failure; JsonNode get(String path,String token) throws Failure; }
+ public interface Gateway { JsonNode token(Map<String,String> fields) throws Failure; JsonNode get(String path,String token) throws Failure; default JsonNode command(String path,String token,Map<String,Object> body)throws Failure{throw new Failure("COMMAND_NOT_CONFIGURED");} }
  public static class Failure extends Exception { final String code; public Failure(String code){super(code);this.code=code;} }
  public static final class Tokens {
   private String access,refresh; private Instant expires;
@@ -24,7 +24,7 @@ public class TeslaIntegration {
   @Override public String toString(){return "[redacted]";}
  }
  public static final class Session {
-  private String state; private Instant stateExpiry; private Tokens tokens;
+  private String state; private Instant stateExpiry; private Tokens tokens; private boolean commands,requestedCommands;
   private final Map<String,String> vehicles=new HashMap<>(); private String selected;
   @Override public String toString(){return "[redacted]";}
  }
@@ -34,17 +34,18 @@ public class TeslaIntegration {
  public TeslaIntegration(String id,String secret,String redirect,Gateway gateway,Clock clock){this.clientId=id;this.secret=secret;this.redirect=redirect;this.gateway=gateway;this.clock=clock;}
  static String enc(String s){return URLEncoder.encode(s,StandardCharsets.UTF_8);}
  private String nonce(){byte[] b=new byte[32];random.nextBytes(b);return Base64.getUrlEncoder().withoutPadding().encodeToString(b);}
- public synchronized String begin(Session s,boolean location) throws Failure {
+ public synchronized String begin(Session s,boolean location) throws Failure {return begin(s,location,false);}
+ public synchronized String begin(Session s,boolean location,boolean commands) throws Failure {
   if(clientId==null||clientId.isBlank()||secret==null||secret.isBlank()||redirect==null||!redirect.startsWith("https://"))throw new Failure("NOT_CONFIGURED");
-  s.state=nonce();s.stateExpiry=clock.instant().plusSeconds(300);
-  return AUTHORIZE+"?response_type=code&client_id="+enc(clientId)+"&redirect_uri="+enc(redirect)+"&scope="+enc(SCOPE+(location?" vehicle_location":""))+"&state="+enc(s.state)+"&prompt_missing_scopes=true";
+  s.commands=false;s.requestedCommands=commands;s.state=nonce();s.stateExpiry=clock.instant().plusSeconds(300);
+  return AUTHORIZE+"?response_type=code&client_id="+enc(clientId)+"&redirect_uri="+enc(redirect)+"&scope="+enc(SCOPE+(location?" vehicle_location":"")+(commands?" vehicle_cmds":""))+"&state="+enc(s.state)+"&prompt_missing_scopes=true&require_requested_scopes="+commands;
  }
  public void callback(Session s,String state,String code,String error) throws Failure {
   synchronized(s){String expected=s.state; Instant expires=s.stateExpiry;s.state=null;s.stateExpiry=null;
    if(expected==null||state==null||!java.security.MessageDigest.isEqual(expected.getBytes(StandardCharsets.UTF_8),state.getBytes(StandardCharsets.UTF_8))||expires==null||!clock.instant().isBefore(expires))throw new Failure("INVALID_STATE");
    if(error!=null||code==null||code.isBlank())throw new Failure("AUTHORIZATION_DENIED");
    JsonNode data=gateway.token(Map.of("grant_type","authorization_code","client_id",clientId,"client_secret",secret,"redirect_uri",redirect,"audience",AUDIENCE,"code",code));
-   s.tokens=readTokens(data);s.vehicles.clear();s.selected=null;
+   s.tokens=readTokens(data);s.commands=s.requestedCommands&&(!data.has("scope")||Arrays.asList(data.path("scope").asText("").split(" ")).contains("vehicle_cmds"));s.requestedCommands=false;s.vehicles.clear();s.selected=null;
   }
  }
  private Tokens readTokens(JsonNode data)throws Failure {String a=data.path("access_token").asText(""),r=data.path("refresh_token").asText("");long n=data.path("expires_in").asLong(0);if(a.isBlank()||r.isBlank()||n<=0)throw new Failure("TOKEN_RESPONSE_INVALID");return new Tokens(a,r,clock.instant().plusSeconds(n));}
@@ -79,9 +80,29 @@ public class TeslaIntegration {
   }catch(Failure e){handleFailure(s,e);throw e;}
  }}
  private void handleFailure(Session s,Failure e){if("REAUTH_REQUIRED".equals(e.code)){s.tokens=null;s.vehicles.clear();s.selected=null;}}
+ public String selected(Session s)throws Failure{synchronized(s){if(s.selected==null)throw new Failure("NO_VEHICLE_SELECTED");return s.selected;}}
+ public String sendDestination(Session s,VehicleNavigationAdapter.Stop stop)throws Failure{synchronized(s){
+  if(!s.commands)throw new Failure("COMMAND_PERMISSION_REQUIRED");
+  String vin=s.vehicles.get(selected(s));if(vin==null)throw new Failure("NO_VEHICLE_SELECTED");
+  String token=access(s),base="/api/1/vehicles/"+enc(vin);
+  try{
+   JsonNode info=gateway.get(base,token).path("response");
+   if(!"online".equals(info.path("state").asText()))throw new Failure("OFFLINE_OR_ASLEEP");
+   JsonNode result=gateway.command(base+"/command/navigation_request",token,Map.of("type","share_ext_content_raw","value",Map.of("android.intent.extra.TEXT",stop.navigationText()),"locale","ko-KR","timestamp_ms",Long.toString(clock.millis())));
+   if(!result.path("response").path("result").isBoolean())return "UNKNOWN";
+   return result.path("response").path("result").asBoolean()?"REQUEST_ACCEPTED":"FAILED";
+  }catch(Failure e){handleFailure(s,e);throw e;}
+ }}
  public static class HttpGateway implements Gateway {
   private final HttpClient http=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();private final ObjectMapper mapper;
-  public HttpGateway(ObjectMapper mapper){this.mapper=mapper;}
+  private final String commandBase;
+  public HttpGateway(ObjectMapper mapper){this(mapper,"");}
+  public HttpGateway(ObjectMapper mapper,String commandBase){this.mapper=mapper;this.commandBase=commandBase.replaceAll("/+$","");if(!commandBase.isBlank()){URI u=URI.create(this.commandBase);if(!"https".equals(u.getScheme())||u.getHost()==null||u.getUserInfo()!=null||u.getQuery()!=null||!u.getPath().isEmpty())throw new IllegalArgumentException("TESLA_COMMAND_PROXY_URL must be an HTTPS origin");}}
+  public JsonNode command(String path,String token,Map<String,Object> body)throws Failure{
+   // navigation_request is a REST exception in Tesla's official proxy.
+   if(!path.endsWith("/command/navigation_request"))throw new Failure("UNSUPPORTED_COMMAND");
+   try{return send(HttpRequest.newBuilder(URI.create((commandBase.isBlank()?AUDIENCE:commandBase)+path)).timeout(Duration.ofSeconds(15)).header("Authorization","Bearer "+token).header("Content-Type","application/json").POST(HttpRequest.BodyPublishers.ofString(mapper.writeValueAsString(body))).build());}catch(Failure e){throw e;}catch(Exception e){throw new Failure("COMMAND_RESULT_UNKNOWN");}
+  }
   public JsonNode token(Map<String,String> fields)throws Failure{String body=fields.entrySet().stream().map(e->enc(e.getKey())+"="+enc(e.getValue())).reduce((a,b)->a+"&"+b).orElse("");return send(HttpRequest.newBuilder(URI.create(TOKEN)).timeout(Duration.ofSeconds(10)).header("Content-Type","application/x-www-form-urlencoded").POST(HttpRequest.BodyPublishers.ofString(body)).build());}
   public JsonNode get(String path,String token)throws Failure{return send(HttpRequest.newBuilder(URI.create(AUDIENCE+path)).timeout(Duration.ofSeconds(10)).header("Authorization","Bearer "+token).GET().build());}
   private JsonNode send(HttpRequest request)throws Failure{try{var response=http.send(request,HttpResponse.BodyHandlers.ofString());int status=response.statusCode();if(status==401)throw new Failure("REAUTH_REQUIRED");if(status==403)throw new Failure("PERMISSION_DENIED");if(status==404||status==412)throw new Failure("NO_DATA");if(status==408||status==429||status>=500)throw new Failure("SERVICE_UNAVAILABLE");if(status<200||status>=300)throw new Failure("REQUEST_FAILED");return mapper.readTree(response.body());}catch(Failure e){throw e;}catch(Exception e){throw new Failure("SERVICE_UNAVAILABLE");}}

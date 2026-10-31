@@ -15,7 +15,8 @@ import java.util.*;
 public class Application implements WebMvcConfigurer {
     private final JsonNode courses;
     private final Routing routing;
-    public Application(ObjectMapper mapper, Routing routing) throws Exception { courses = mapper.readTree(getClass().getResourceAsStream("/courses.json")); this.routing=routing; }
+    private final NavigationTickets navigationTickets;
+    public Application(ObjectMapper mapper, Routing routing, NavigationTickets navigationTickets) throws Exception { courses = mapper.readTree(getClass().getResourceAsStream("/courses.json")); this.routing=routing; this.navigationTickets=navigationTickets; }
     @org.springframework.context.annotation.Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean(Routing.RoadProvider.class)
     static Routing.RoadProvider defaultRoadProvider(ObjectMapper mapper, @org.springframework.beans.factory.annotation.Value("${ROAD_ROUTING_URL:}") String url){return url.isBlank()?new Routing.MockProvider():new OsrmRoadProvider(mapper,url);}
@@ -26,11 +27,11 @@ public class Application implements WebMvcConfigurer {
     record Request(Double latitude, Double longitude, Integer availableMinutes, String scenery, String vehicleType, Double batteryPercent, Double estimatedRangeKm, Weather weather, Map<String,Weather> courseWeather, Boolean originSevere, Boolean walking, String departure, Double returnLatitude, Double returnLongitude) {}
     record Waypoint(String name, String description) {}
     record DataSource(String course, String distanceTime, String weather, String weatherObservedAt, String generatedAt) {}
-    record Result(String id, String name, List<String> reasons, int estimatedRoundTripKm, int estimatedMinutes, List<Waypoint> waypoints, String distanceTimeStatus, String batteryStatus, DataSource dataSource, Routing.Route route) {}
+    record Result(String id, String name, List<String> reasons, int estimatedRoundTripKm, int estimatedMinutes, List<Waypoint> waypoints, String distanceTimeStatus, String batteryStatus, DataSource dataSource, Routing.Route route, String navigationTicket) {}
     record Response(List<Result> courses, int weatherExcluded, int timeExcluded, int routingFailed, String guidance) {}
     record Candidate(JsonNode course,int km,int minutes,double score,Weather weather,Routing.Route route) {}
-    @PostMapping("/api/recommendations") public Response recommend(@RequestBody Request req) {
-        validate(req); return recommendInternal(req);
+    @PostMapping("/api/recommendations") public ResponseEntity<Response> recommend(@RequestBody Request req) {
+        validate(req); return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(recommendInternal(req));
     }
     private Response recommendInternal(Request req) { List<Candidate> candidates = new ArrayList<>(); int excluded=0, timeExcluded=0, routingFailed=0;
         for(JsonNode c:courses) {
@@ -63,7 +64,7 @@ public class Application implements WebMvcConfigurer {
             List<Waypoint> points=new ArrayList<>(); for(Routing.Point p:x.route.points())points.add(new Waypoint(p.name(),p.verification()));
             List<String> why=new ArrayList<>(); why.add(x.route.status().equals("ROAD_ROUTED")?"출발지와 왕복 가능 시간을 기준으로 계산했어요.":"출발지와 왕복 가능 시간을 기준으로 추정했어요."); if(!req.scenery.equals("all")&&req.scenery.equals(x.course.path("mood").asText())) why.add("선택한 풍경 취향을 반영했어요."); if(x.weather!=null)why.add("제공된 날씨 조건을 반영했어요.");
             String bs="ev".equals(req.vehicleType)&&!"ROAD_ROUTED".equals(x.route.status())?"ROAD_ROUTE_REQUIRED":batteryStatus(req,x.km); if(bs.equals("ROAD_ROUTE_REQUIRED"))why.add("실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."); else if(bs.equals("INSUFFICIENT_INPUT"))why.add("배터리 판단에 필요한 입력이 부족해요."); else if(bs.equals("CHARGING_MAY_BE_NEEDED"))why.add("입력값 기준 충전이 필요할 수 있어요.");
-            results.add(new Result(x.course.path("id").asText(),x.course.path("name").asText(),why,x.km,x.minutes,points,x.route.status(),bs,new DataSource("내장 예시 코스 10개", x.route.status().equals("ROAD_ROUTED")?x.route.provider():"각 구간 직선거리 × 1.18 및 평균 55km/h 추정",x.weather==null?"없음: 예시 날씨":x.weather.source,x.weather==null?null:x.weather.observedAt,Instant.now().toString()),x.route));
+            results.add(new Result(x.course.path("id").asText(),x.course.path("name").asText(),why,x.km,x.minutes,points,x.route.status(),bs,new DataSource("내장 예시 코스 10개", x.route.status().equals("ROAD_ROUTED")?x.route.provider():"각 구간 직선거리 × 1.18 및 평균 55km/h 추정",x.weather==null?"없음: 예시 날씨":x.weather.source,x.weather==null?null:x.weather.observedAt,Instant.now().toString()),x.route,navigationTickets.issue(x.course.path("id").asText(),x.route)));
         } return new Response(results,excluded,timeExcluded,routingFailed,results.isEmpty()?(routingFailed>0?"경로 계산에 실패한 후보가 있습니다. 잠시 후 다시 시도하거나 조건을 조정하세요.":"조건에 맞는 코스가 없습니다. 이용 시간을 늘리거나 날씨 조건을 확인하세요."):(results.stream().allMatch(r->r.route.status().equals("ROAD_ROUTED"))?"도로 경로 기준 추천입니다.":"차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."));
     }
     static String batteryStatus(Request r,int km){if(!"ev".equals(r.vehicleType))return "NOT_APPLICABLE"; if(r.batteryPercent==null||r.estimatedRangeKm==null)return "INSUFFICIENT_INPUT"; return r.batteryPercent-km*1.2/r.estimatedRangeKm*100<15?"CHARGING_MAY_BE_NEEDED":"ESTIMATED_SUFFICIENT";}

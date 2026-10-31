@@ -1,8 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+ <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
  <uses-permission android:name="android.permission.INTERNET" />
- <uses-permission android:name="pleos.car.permission.CAR_DOORS" />
  <uses-permission android:name="pleos.car.permission.NAVI_ROUTE_SEARCH" />
- <application android:label="결론 · Pleos 에뮬레이터" android:usesCleartextTraffic="false" android:networkSecurityConfig="@xml/network_security_config" android:allowBackup="false">
+ <uses-permission android:name="pleos.car.permission.NAVI_ROUTE" />
+ <uses-permission android:name="pleos.car.permission.CAR_ENERGY" />
+ <application android:label="결론 · Pleos 에뮬레이터" android:usesCleartextTraffic="false" android:allowBackup="false">
+  <uses-library android:name="android.car" android:required="false" />
   <activity android:name=".MainActivity" android:exported="true"><intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter></activity>
  </application>
 </manifest>

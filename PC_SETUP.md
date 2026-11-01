@@ -29,7 +29,7 @@ Pleos 앱은 웹 추천 티켓을 검증하고 전체 코스를 구간마다 경
 
 ## 3. Tesla 실제 인증과 캐시 조회 준비
 
-[Tesla 앱 등록](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api), [지역](https://developer.tesla.com/docs/fleet-api/getting-started/regions-countries), [요금](https://developer.tesla.com/docs/fleet-api/billing-and-limits)을 확인한다. 승인된 앱, 등록된 HTTPS 도메인/콜백, HTTPS 인증서, 공개키 호스팅 및 아시아태평양(중국 제외) 파트너 등록이 필요하다. 중국 생산 여부로 지역을 선택하지 않는다. 조회 전 `/api/1/users/region`으로 해당 계정의 지역 URL이 이 환경과 일치하는지 확인하고 다르면 중단한다. 지역과 호출에 따라 비용이 발생할 수 있다. 실제 계정 한도 및 단가 확인 필요.
+[Tesla 앱 등록](https://developer.tesla.com/docs/fleet-api/getting-started/what-is-fleet-api), [지역](https://developer.tesla.com/docs/fleet-api/getting-started/regions-countries), [요금](https://developer.tesla.com/docs/fleet-api/billing-and-limits)을 확인한다. 승인된 앱, 등록된 HTTPS 도메인/콜백, HTTPS 인증서, 공개키 호스팅 및 아시아태평양(중국 제외) 파트너 등록이 필요하다. 중국 생산 여부로 지역을 선택하지 않는다. 차량 목록은 고정된 북미·아태 Fleet API의 `/api/1/vehicles`에서 직접 조회한다. 지역 오류(HTTP 421)는 중단하며 다른 지역으로 자동 전송하지 않는다. 차량 목록 전에 프로필용 `/api/1/users/region`을 요구하지 않는다. 지역과 호출에 따라 비용이 발생할 수 있다. 실제 계정 한도 및 단가 확인 필요.
 
 테스트 서버 프로세스를 사용자가 직접 시작하는 동일 PowerShell 창에서 설정한다. 값은 채팅·소스에 남기지 않는다.
 

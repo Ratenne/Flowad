@@ -53,7 +53,17 @@ public class TeslaIntegration {
  public void disconnect(Session s){synchronized(s){s.state=null;s.stateExpiry=null;s.tokens=null;s.vehicles.clear();s.selected=null;}}
  public boolean connected(Session s){synchronized(s){return s.tokens!=null;}}
  private Failure stageFailure(String stage,Failure e){return switch(e.code){case "NO_DATA"->new Failure(stage+"_ENDPOINT_UNAVAILABLE");case "PERMISSION_DENIED"->new Failure(stage+"_PERMISSION_DENIED");case "SERVICE_UNAVAILABLE"->new Failure(stage+"_SERVICE_UNAVAILABLE");case "REQUEST_FAILED"->new Failure(stage+"_REQUEST_FAILED");default->e;};}
- public String region(Session s)throws Failure{synchronized(s){try{JsonNode r=gateway.get("/api/1/users/region",access(s)).path("response");String base=r.path("fleet_api_base_url").asText("");if(!AUDIENCE.equals(base))throw new Failure("REGION_MISMATCH_OR_UNCONFIRMED");return "ASIA_PACIFIC_NA";}catch(Failure e){handleFailure(s,e);throw stageFailure("REGION",e);}}}
+ static String confirmedRegion(JsonNode data)throws Failure {
+  JsonNode r=data.has("response")?data.path("response"):data;
+  String base=r.path("fleet_api_base_url").asText("").trim();
+  if(base.endsWith("/"))base=base.substring(0,base.length()-1);
+  if(AUDIENCE.equals(base))return "ASIA_PACIFIC_NA";
+  if("https://fleet-api.prd.eu.vn.cloud.tesla.com".equals(base))throw new Failure("REGION_MISMATCH_EU");
+  if("https://fleet-api.prd.cn.vn.cloud.tesla.cn".equals(base))throw new Failure("REGION_MISMATCH_CN");
+  if(base.isBlank())throw new Failure("REGION_RESPONSE_INVALID");
+  throw new Failure("REGION_BASE_UNRECOGNIZED");
+ }
+ public String region(Session s)throws Failure{synchronized(s){try{return confirmedRegion(gateway.get("/api/1/users/region",access(s)));}catch(Failure e){handleFailure(s,e);throw stageFailure("REGION",e);}}}
  public List<Vehicle> vehicles(Session s)throws Failure {synchronized(s){region(s);JsonNode resp;
   try{resp=gateway.get("/api/1/vehicles",access(s));}catch(Failure e){handleFailure(s,e);throw stageFailure("VEHICLE_LIST",e);}
   JsonNode list=resp.path("response");if(!list.isArray())throw new Failure("INVALID_RESPONSE");

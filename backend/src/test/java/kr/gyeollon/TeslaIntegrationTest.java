@@ -24,4 +24,11 @@ class TeslaIntegrationTest {
   assertEquals("INCORRECT_REGION",assertThrows(TeslaIntegration.Failure.class,()->TeslaIntegration.HttpGateway.checkStatus(421,"/api/1/users/region")).code);
   assertDoesNotThrow(()->TeslaIntegration.HttpGateway.checkStatus(200,"/api/1/users/region"));
  }
+ @Test void confirmsRegionalOriginWithoutAcceptingUnknownHosts()throws Exception{
+  assertEquals("ASIA_PACIFIC_NA",TeslaIntegration.confirmedRegion(mapper.readTree("{\"response\":{\"fleet_api_base_url\":\"https://fleet-api.prd.na.vn.cloud.tesla.com/\"}}")));
+  assertEquals("ASIA_PACIFIC_NA",TeslaIntegration.confirmedRegion(mapper.readTree("{\"fleet_api_base_url\":\"https://fleet-api.prd.na.vn.cloud.tesla.com\"}")));
+  assertEquals("REGION_MISMATCH_EU",assertThrows(TeslaIntegration.Failure.class,()->TeslaIntegration.confirmedRegion(mapper.readTree("{\"response\":{\"fleet_api_base_url\":\"https://fleet-api.prd.eu.vn.cloud.tesla.com\"}}"))).code);
+  assertEquals("REGION_RESPONSE_INVALID",assertThrows(TeslaIntegration.Failure.class,()->TeslaIntegration.confirmedRegion(mapper.readTree("{\"response\":{}}"))).code);
+  assertEquals("REGION_BASE_UNRECOGNIZED",assertThrows(TeslaIntegration.Failure.class,()->TeslaIntegration.confirmedRegion(mapper.readTree("{\"response\":{\"fleet_api_base_url\":\"https://fleet-api.prd.na.vn.cloud.tesla.com.evil.test\"}}"))).code);
+ }
 }

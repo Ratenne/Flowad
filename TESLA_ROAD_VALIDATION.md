@@ -33,3 +33,13 @@
 - https://github.com/teslamotors/vehicle-command/blob/main/pkg/proxy/command.go
 - https://visitbusan.net/kr/index.do?lang_cd=ko&menuCd=DOM_000000201001001000&uc_seq=1310
 
+
+## 2026-11-01 파트너 등록 준비
+
+- PR #2 배포 후 실제 지역 조회에서 HTTP 412(PRECONDITION_FAILED)를 확인했다. OAuth 로그인·동의와 API 파트너 등록은 별개다. 차량 조회·명령은 성공하지 않았다.
+- 등록 도메인의 공개키 주소가 PEM 대신 일반 페이지를 반환했다. ravirgo 사이트 PR #5에서 P-256 공개키와 Content-Type을 추가했다. 운영 HTTPS에서 HTTP 200, text/plain, 공개키 DER 지문 일치를 실제 확인했다. 인증이나 쿠키 없이 식별용 User-Agent Flowad-Tesla-Partner-Setup/1.0으로 조회했다.
+- 공개키 DER SHA-256: `3a6e1f167161a66fc2e3941ff2da908ed8f0cbb5d38c9e105fca59bd097ad3c9`. 개인키는 저장소 밖 로컬 `~/Library/Flowad/tesla/private-key.pem`에 0600, 상위 폴더 0700으로 보관한다. 서버·브라우저·채팅으로 복사하지 않는다.
+- `TeslaPartnerRegistration`은 기본 비활성이다. 운영자가 Render의 `TESLA_REGISTER_PARTNER=true`로 켠 경우에만 시작 시 한 번 실행한다. 공개 HTTPS 키와 포함된 예상 키의 일치를 먼저 확인하고, Render의 기존 앱 인증정보로 파트너 토큰을 받아 북미·아태 API에 `ravirgo.com`을 등록한다. 이 코드에는 공개 관리자 HTTP 엔드포인트가 없다.
+- 기존 공개키 조회가 200이면 일치 여부만 확인하고 등록을 보내지 않는다. 404/412일 때만 등록을 시도한다. 오류 시 반복 요청하지 않으며 상태 코드와 고정 결과만 로그에 남긴다. 원문·토큰·앱 비밀 값은 남기지 않는다.
+- 등록 후 즉시 `TESLA_REGISTER_PARTNER`를 제거하거나 false로 저장한다. 이후 재시작에 등록이 재실행되지 않도록 해야 한다. 가상키 페어링, 개인키 업로드, 프록시 배포, 결제 한도 변경은 수행하지 않는다.
+- 서버 파트너 등록은 아직 활성화·실행하지 않았다. 공개키 확인 → 등록 활성화 → 실제 지역/차량 조회 → 사용자 지정 목적지 전송 → 실제 차량 화면 확인 순으로 진행한다.

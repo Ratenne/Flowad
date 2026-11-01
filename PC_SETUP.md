@@ -23,7 +23,7 @@ mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081 --server.add
 
 타사 지도 길찾기 API를 사용하지 않는다. 서버의 `RoadProvider`는 현재 목 추정만 제공한다. Tesla Fleet API는 목적지와 경유지 전달 명령을 문서화하지만, 사용자 선택 전 여러 후보의 전체 왕복 경로를 순정 내비로 탐색해 앱에 반환하는 기능은 확인되지 않았다. 명령의 요청 형식과 지원 조건도 미확인이라 전송은 차단되어 있다.
 
-Pleos NaviHelper는 경유지 경로 요청과 콜백을 제공하지만 아직 앱 연결·에뮬레이터 테스트가 필요하다. 공식 문서상 경유지는 최대 두 개이며 현재 예시 코스는 세 개다. 내비 요청이 차량 내 경로를 변경할 수 있으므로 사용자의 명시적 요청과 UX 제한 조건을 확인해야 한다. 무조건 후보별로 순정 내비에 요청하지 않는다. 경로 길이·시간·경로선과 API 제공 범위는 실응답으로 확인해야 한다.
+Pleos 앱은 웹 추천 티켓을 검증하고 전체 코스를 구간마다 경유지 최대 두 개와 목적지로 나눠 순차 전송한다. NaviHelper 요청·결과는 에뮬레이터에서 확인했으며, 실제 도착 이벤트는 미검증이다. 내비 요청이 차량 내 경로를 변경할 수 있으므로 사용자의 명시적 요청과 UX 제한 조건을 확인해야 한다. 무조건 후보별로 순정 내비에 요청하지 않는다. 경로 길이·시간·경로선과 API 제공 범위는 실응답으로 확인해야 한다.
 
 기존 3D 지형의 Copernicus 고도 데이터와 과거 OSM/OSRM 하이라이트는 차량 내비 지도가 아니다. 이전에 생성된 로컬 자산으로, 현재 왕복을 나타내지 않는다. 이 프로젝트는 실제 3D 도로 지도를 순정 내비에서 제공받는다고 주장하지 않는다.
 
@@ -43,9 +43,9 @@ $env:TESLA_REDIRECT_URI = Read-Host '등록한 HTTPS callback URL'
 
 ## 4. Pleos 개발 환경 준비
 
-[공식 시작 가이드](https://document.pleos.ai/en/docs/pleos-only/getting-started)에 따라 Android Studio, Android SDK API 34, Pleos Connect API 34 시스템 이미지 및 Virtual Console을 설치한다. SDK 이미지 URL은 제공받은 공식 안내에서 SDK Manager에 등록한다. 공식 가이드는 Cold boot와 RAM 4GB를 안내한다. `pleos-android/`를 Android Studio에서 열고 Gradle sync 후 에뮬레이터를 실행한다. 앱 초안은 `10.0.2.2:8081`의 로컬 서버 화면을 읽는다. 호스트 서버를 먼저 실행한다. 공식 SDK 접근 승인 및 네트워크가 필요하다.
+[공식 시작 가이드](https://document.pleos.ai/en/docs/pleos-only/getting-started)에 따라 Android Studio, Android SDK API 34, Pleos Connect API 34 시스템 이미지 및 Virtual Console을 설치한다. SDK 이미지 URL은 제공받은 공식 안내에서 SDK Manager에 등록한다. 공식 가이드는 Cold boot와 RAM 4GB를 안내한다. `pleos-android/`를 Android Studio에서 열고 Gradle sync 후 에뮬레이터를 실행한다. 앱은 운영 HTTPS `https://ravirgo.com/flowad/` 화면과 같은 출처의 추천·티켓 검증 API를 사용한다. 공식 SDK 접근 승인 및 네트워크가 필요하다.
 
-Android 초안은 빌드·실행 미검증이다. 현재 에뮬레이터의 문 상태 테스트와 NaviHelper 초기화만 작성했으며 웹과 네이티브 간 JS 브리지는 없다. NaviHelper 실제 경로 요청·콜백, 주행 UX 제한 신호와 차량 배터리 조회는 구현·검증되지 않았다. Pleos 문서의 경유지 최대 2개와 현재 코스 3개 경유지 차이를 해결하기 전 경로 전송을 활성화하지 않는다. SDK 연결 성공 또는 시뮬레이션 값은 실차 검증을 의미하지 않는다.
+Debug·Release 빌드와 Pleos AVD의 SDK 초기화·실제 구간 요청·목적지 응답을 검증했다. 테스트에서 도착 이벤트를 주입하고 사용자 확인 후 다음 구간의 실제 전송을 확인했다. 실제 도착 신호 발생은 미검증이다. CarUxRestrictions로 주행 제한을 적용하며 안전한 웹 브리지와 경로 복원은 [4단계 기록](PLEOS_STAGE4.md), 최종 검증 범위는 [검증 기록](PLEOS_VALIDATION.md)을 참조한다. SDK 연결 성공 또는 시뮬레이션 값은 실차 검증을 의미하지 않는다.
 
 ## 5. 충전소 제공자 검토
 
@@ -61,7 +61,7 @@ node scripts/test-terrain.mjs
 node scripts/test-battery.mjs
 ```
 
-실제 Tesla API, Pleos SDK 에뮬레이터 응답은 아직 검증하지 않았다. 확인 전에는 Tesla 내비 전송은 `UNSUPPORTED`다. 실차 명령·깨우기·배포·DNS 변경은 실행하지 않았다.
+Pleos SDK 에뮬레이터 응답과 테스트 한계는 [검증 기록](PLEOS_VALIDATION.md)에 기록한다. 실제 Tesla API 검증 여부는 Tesla 문서를 확인한다. 확인 전에는 Tesla 내비 전송은 `UNSUPPORTED`다. 실차 명령·깨우기·배포·DNS 변경은 실행하지 않았다.
 
 ### HTTPS 서버 직접 실행 예시
 

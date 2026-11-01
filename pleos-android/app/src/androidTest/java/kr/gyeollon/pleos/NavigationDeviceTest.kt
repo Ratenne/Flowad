@@ -10,7 +10,7 @@ import org.junit.Test
 import org.junit.Assert.*
 import java.io.File
 
-/** Actual SDK service test. Does not inject or synthesize navigation callbacks. */
+/** Actual SDK requests; optional simulatedArrival injects an arrival only in this test APK. */
 class NavigationDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private fun texts(view: View): List<TextView> =

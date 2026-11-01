@@ -17,6 +17,20 @@ class JourneyStoreDeviceTest {
    assertThrows(IllegalStateException::class.java) { restored.beginRequest() }
   } finally { store.clear() }
  }
+ @Test fun encryptedCheckpointUsesFreshNonceAndRejectsTampering() {
+  val store=JourneyStore(context,name); val prefs=context.getSharedPreferences(name,0)
+  try {
+   store.save(SegmentJourney(route())); val first=prefs.getString("current",null)!!
+   assertFalse(first.contains("지점")); assertFalse(first.contains("latitude")); assertNotNull(store.load())
+   store.save(SegmentJourney(route())); val second=prefs.getString("current",null)!!
+   assertNotEquals(org.json.JSONObject(first).getString("iv"),org.json.JSONObject(second).getString("iv"))
+   val envelope=org.json.JSONObject(second); val bytes=android.util.Base64.decode(envelope.getString("ciphertext"),0)
+   bytes[0]=(bytes[0].toInt() xor 1).toByte()
+   envelope.put("ciphertext",android.util.Base64.encodeToString(bytes,2))
+   prefs.edit().putString("current",envelope.toString()).commit()
+   assertNull(store.load()); assertFalse(prefs.contains("current"))
+  } finally { store.clear() }
+ }
  @Test fun corruptStateIsDiscarded() {
   val preferences=context.getSharedPreferences(name,0)
   preferences.edit().putString("current","invalid").commit()

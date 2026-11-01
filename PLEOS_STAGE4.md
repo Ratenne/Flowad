@@ -1,6 +1,6 @@
 # Pleos Connect 4단계
 
-2026-10-31. NaviHelper 3.0.5 / Vehicle 2.3.2, minSdk 28, compile/target SDK 34, JDK 17, AGP 8.7.3, Kotlin 2.0.21, Gradle 8.9. Pleos AVD 2.1.0 ARM64, RAM 4GB, Cold boot. 에뮬레이터 Navi Service는 3.0.4다.
+2026-11-01. NaviHelper 3.0.5 / Vehicle 2.3.2, minSdk 28, compile/target SDK 34, JDK 17, AGP 8.7.3, Kotlin 2.0.21, Gradle 8.9. Pleos AVD 2.1.0 ARM64, RAM 4GB, Cold boot. 에뮬레이터 Navi Service는 3.0.4다.
 
 ## 웹에서 차량까지
 
@@ -18,7 +18,7 @@
 
 실제 도착 콜백에는 요청 ID·좌표가 없어 사용자 도착 확인을 추가로 요구한다. 앱이 도착 이벤트를 임의 생성하지 않는다. 시뮬레이션은 `androidTest`에서만 주입하며 릴리스에 포함되지 않는다. 실제 서비스의 도착 이벤트 발생과 테스트 대역 성공은 별개다.
 
-CarUxRestrictions를 사용하고, 제한·미확인·연결 실패 상태는 조작을 막는다. 웹의 주행 미리보기는 안전 신호로 사용하지 않는다. 저장 경로는 비공개 저장소에 24시간까지 보관하며 복원은 항상 PAUSED다. 도착 확인된 구간은 다음 구간으로 체크포인트를 남기고, 사용자가 확인하기 전에는 다시 전송하지 않는다. 웹 오류 재시도와 렌더러 종료 복구 시에도 경로는 일시 중지한다.
+CarUxRestrictions를 사용하고, 제한·미확인·연결 실패 상태는 조작을 막는다. 웹의 주행 미리보기는 안전 신호로 사용하지 않는다. 기존 개발 버전의 평문 체크포인트는 복원하지 않고 폐기한다. Keystore 오류 시에도 평문으로 저장하지 않는다. 저장 경로는 Android Keystore의 AES-256-GCM으로 암호화해 비공개 저장소에 24시간까지 보관하며 복원은 항상 PAUSED다. 도착 확인된 구간은 다음 구간으로 체크포인트를 남기고, 사용자가 확인하기 전에는 다시 전송하지 않는다. 웹 오류 재시도와 렌더러 종료 복구 시에도 경로는 일시 중지한다.
 
 ## 차량 상태
 
@@ -33,6 +33,16 @@ scripts/pleos-emulator.sh
 
 기존 설치 경로는 `~/Library/Android/sdk`, JDK는 `~/Library/Flowad/toolchains/jdk-17.0.21+9/Contents/Home`다. 앱과 테스트 APK를 설치한 뒤 `adb shell am instrument -w kr.gyeollon.pleos.test/androidx.test.runner.AndroidJUnitRunner`로 실행한다. 주행 제한 테스트는 `externalRestriction=true`와 Virtual Console의 P→D 전환이 필요하다. 내비 시뮬레이션 테스트는 `simulatedArrival=true`, 실제 도착 대기 테스트는 `waitArrival=true`로 별도 실행한다. 기본 테스트의 생략 항목을 성공으로 세지 않는다.
 
-백엔드 티켓 변조·만료·다른 키 거부 및 원본 경로 일치 테스트와 기존 백엔드 테스트를 실행했다. Android 단위 테스트, 에뮬레이터 응답 파싱·출처 차단·복원 테스트를 실행했다. 자세한 최종 결과는 배포 검증 기록에 남긴다. 실제 차량·지역별 앱 심사·실제 도착 콜백·NAVI_CUSTOM_MAP 화면 전환은 검증 완료로 주장하지 않는다.
+백엔드 티켓 변조·만료·다른 키 거부 및 원본 경로 일치 테스트와 기존 백엔드 테스트를 실행했다. Android 단위 테스트, 에뮬레이터 응답 파싱·출처 차단·복원 테스트를 실행했다. 자세한 최종 결과는 [배포 검증 기록](PLEOS_VALIDATION.md)에 남긴다. 실제 차량·지역별 앱 심사·실제 도착 콜백·NAVI_CUSTOM_MAP 화면 전환은 검증 완료로 주장하지 않는다.
 
 공식 문서: [SDK 초기화](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/NaviHelper/initialization-and-release), [경유지](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/NaviHelper/waypoint-settings), [주행 제한](https://document.pleos.ai/en/docs/pleos-only/vehicle-app-planning-guide/driver-distraction-guideline), [앱 보안](https://document.pleos.ai/en/docs/pleos-only/app-registration-guide/app-security-guide).
+
+## SDK 설정과 배포 전제
+
+Maven 저장소는 `https://nexus-playground.pleos.ai/repository/maven-releases/`이며 의존성은 `ai.pleos.playground:NaviHelper:3.0.5`, `ai.pleos.playground:Vehicle:2.3.2`다. 현재 코드가 실제로 컴파일하고 AVD에 연결한 버전을 고정했다. Gradle/AGP/Kotlin 버전은 이 프로젝트에서 검증한 조합이며 모든 Pleos 환경에 대한 공식 지원 범위라는 의미는 아니다. 다른 버전으로 올릴 때 이벤트·모델 호환성을 다시 검증해야 한다.
+
+[프로젝트·SDK 신청 공식 안내](https://document.pleos.ai/en/docs/pleos-only/create-my-project)에 따르면 Vehicle State와 NaviHelper는 Ready to Use이며 별도 신청 없이 사용 가능하다. SDK Client ID/Secret은 TTS/STT 같은 서버 연결 SDK용이다. 현재 NaviHelper 초기화에는 이 비밀키를 넣지 않는다. Project ID는 앱 심사 요청 시 필요하고 에뮬레이터 2.1.0부터 CRN은 필요하지 않다. 앱에 client secret을 하드코딩하지 않는다.
+
+Manifest에는 INTERNET, NAVI_ROUTE, NAVI_ROUTE_SEARCH, CAR_ENERGY를 선언한다. NAVI_CUSTOM_MAP 화면 전환 권한은 사용하지 않으며 내비 화면 자동 전환을 보장하지 않는다. 주행 중 상세 설정·3D 조작을 차단하고 현재는 보수적으로 앱 상호작용 전체를 제한한다. 앱 유형·국가별 주행 허용 범위가 확정되기 전 이를 완화하지 않는다.
+
+기존 정적 웹과 추천 API를 재사용하고 차량 명령·사용자 확인·주행 제한·복원만 네이티브가 담당한다. 공식 [WebView 보안 지침](https://document.pleos.ai/en/docs/pleos-only/app-registration-guide/app-security-guide)은 WebView 자체를 금지하지 않으며 신뢰 출처·최소 브리지·TLS·저장 암호화·디버깅 제한을 요구한다. AVD에서 화면을 실행했지만 모든 차량 GPU 성능이나 시장 심사 적합성을 보장하지 않는다. 배포용 APK의 정식 인증서 서명, 앱 카테고리·지역별 UX 검토와 마켓 심사는 별도이며 완료하지 않았다.

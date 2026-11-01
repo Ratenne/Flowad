@@ -64,7 +64,7 @@ public class TeslaIntegration {
   throw new Failure("REGION_BASE_UNRECOGNIZED");
  }
  public String region(Session s)throws Failure{synchronized(s){try{return confirmedRegion(gateway.get("/api/1/users/region",access(s)));}catch(Failure e){handleFailure(s,e);throw stageFailure("REGION",e);}}}
- public List<Vehicle> vehicles(Session s)throws Failure {synchronized(s){region(s);JsonNode resp;
+ public List<Vehicle> vehicles(Session s)throws Failure {synchronized(s){JsonNode resp;
   try{resp=gateway.get("/api/1/vehicles",access(s));}catch(Failure e){handleFailure(s,e);throw stageFailure("VEHICLE_LIST",e);}
   JsonNode list=resp.path("response");if(!list.isArray())throw new Failure("INVALID_RESPONSE");
   s.vehicles.clear();s.selected=null;List<Vehicle> result=new ArrayList<>();for(JsonNode v:list){String vin=v.path("vin").asText("");if(vin.isBlank()){s.vehicles.clear();throw new Failure("INVALID_RESPONSE");}String id=nonce();s.vehicles.put(id,vin);result.add(new Vehicle(id,v.path("display_name").asText("Tesla"),v.path("state").asText("unknown")));}return List.copyOf(result);

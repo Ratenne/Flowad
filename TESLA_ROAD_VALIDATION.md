@@ -52,3 +52,5 @@
 
 - 2026-11-01 12:58 KST 초기 등록 POST와 재조회 결과 REGISTERED_AND_VERIFIED를 확인했다(de1ba94, Render dep-dbjbgr95efls73drtu6g). 공개키 DER/SEC1 일치 검증을 통과했다. 이후 TESLA_REGISTER_PARTNER=false 저장과 실제 저장 값 false를 확인했다.
 - 사용자 OAuth 재연결은 성공했으며 차량 조회는 REGION_MISMATCH_OR_UNCONFIRMED에서 중단했다. 지역 API 주소의 끝 슬래시 정규화와 고정 지역 오류 구분을 보완한다. 실제 차량 목록과 명령은 아직 미검증이다.
+
+- PR #7 운영 재검증에서 계정 지역 응답의 API 주소가 누락되어 차량 조회 전 사전 확인이 중단됐다. 프로필 권한을 추가 요청하지 않고, 이미 동의한 vehicle_device_data로 고정 북미·아태 `/api/1/vehicles`를 직접 조회하도록 정리한다. Fleet API의 421 지역 오류와 권한 오류는 중단하고 다른 지역으로 자동 요청하지 않는다. 사용자 위치·프로필 조회 없이 세션에 반환된 차량만 선택·전송할 수 있다.

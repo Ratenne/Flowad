@@ -38,7 +38,7 @@ public class TeslaIntegration {
  public synchronized String begin(Session s,boolean location,boolean commands) throws Failure {
   if(clientId==null||clientId.isBlank()||secret==null||secret.isBlank()||redirect==null||!redirect.startsWith("https://"))throw new Failure("NOT_CONFIGURED");
   s.commands=false;s.requestedCommands=commands;s.state=nonce();s.stateExpiry=clock.instant().plusSeconds(300);
-  return AUTHORIZE+"?response_type=code&client_id="+enc(clientId)+"&redirect_uri="+enc(redirect)+"&scope="+enc(SCOPE+(location?" vehicle_location":"")+(commands?" vehicle_cmds":""))+"&state="+enc(s.state)+"&prompt_missing_scopes=true&require_requested_scopes="+commands;
+  return AUTHORIZE+"?prompt=login&response_type=code&client_id="+enc(clientId)+"&redirect_uri="+enc(redirect)+"&scope="+enc(SCOPE+(location?" vehicle_location":"")+(commands?" vehicle_cmds":""))+"&state="+enc(s.state)+"&prompt_missing_scopes=true&require_requested_scopes="+commands;
  }
  public void callback(Session s,String state,String code,String error) throws Failure {
   synchronized(s){String expected=s.state; Instant expires=s.stateExpiry;s.state=null;s.stateExpiry=null;

@@ -41,7 +41,8 @@ public class TeslaPartnerRegistration implements ApplicationRunner {
   String token=mapper.readTree(auth.body()).path("access_token").asText("");if(token.isBlank())return "TOKEN_INVALID";
   Reply existing=g.registered(token);
   if(existing.status()==200)return containsKey(mapper.readTree(existing.body()),der)?"ALREADY_REGISTERED":"EXISTING_KEY_UNCONFIRMED";
-  if(existing.status()!=404&&existing.status()!=412&&!(existing.status()==403&&"NOT_REGISTERED".equals(reason(existing,mapper))))return "KEY_LOOKUP_HTTP_"+existing.status()+"_"+reason(existing,mapper);
+  // Initial registration is explicitly enabled by the operator. General key lookup can be forbidden before registration.
+  if(existing.status()!=404&&existing.status()!=412&&!(existing.status()==403&&Set.of("NOT_REGISTERED","UNCLASSIFIED").contains(reason(existing,mapper))))return "KEY_LOOKUP_HTTP_"+existing.status()+"_"+reason(existing,mapper);
   Reply sent=g.register(token);if(sent.status()<200||sent.status()>=300)return "REGISTER_HTTP_"+sent.status()+"_"+reason(sent,mapper);
   Reply verified=g.registered(token);
   return verified.status()==200&&containsKey(mapper.readTree(verified.body()),der)?"REGISTERED_AND_VERIFIED":"REGISTERED_VERIFICATION_REQUIRED";

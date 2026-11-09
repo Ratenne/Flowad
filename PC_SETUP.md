@@ -19,6 +19,22 @@ mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=8081 --server.add
 
 브라우저 `http://localhost:8081/`에서 서울 체험 또는 위치 허용 후 추천을 확인한다. 현재 기본 모드는 추정 경로이며 실제 도로·차량 안내가 아니다. 위치 권한은 사용자가 직접 허용한다. 종료는 실행 창의 Ctrl+C. 8080에 다른 서버가 있다면 8081을 사용한다. 실제 Tesla 인증에는 HTTPS가 필요하므로 이 HTTP 주소로는 인증이 안 된다.
 
+### Tesla 브라우저 레이아웃
+
+Tesla 공개 개발자 문서에서 차량 브라우저용 권장 CSS는 확인되지 않았다. 중앙 화면의 크기와 방향은 모델, 생산 시기, 트림에 따라 다르다. Flowad는 현재 브라우저 창의 CSS 픽셀 너비, 높이, 비율로 레이아웃을 결정한다. [Tesla 개발자 문서](https://developer.tesla.com/en_sg) · [Tesla 차량별 매뉴얼](https://www.tesla.com/ownersmanual/)
+
+| 중앙 화면 유형 | 브라우저 재현 크기 | 레이아웃 |
+| --- | --- | --- |
+| Model 3/Y 15–15.4인치 가로형 | 1920×1200, 1254×784 (DPR 1.53) | 코스 열 약 34vw와 지형을 나란히 배치 |
+| Model S/X 후기형 가로 화면 | 2200×1300 | 코스 열과 지형을 나란히 배치 |
+| Model 3/Y 16인치 가로형, Cybertruck 18.5인치 가로형 | 2560×1440, 2650×1440 | 넓은 비율에서 코스 열을 약 30vw로 줄이고 지형을 넓힘 |
+| Model S/X 초기형 세로 화면 | 1200×1920 | 코스 목록 다음에 지형 배치 |
+| 좁거나 높이가 낮은 브라우저 창 | 773×601, 1280×480 | 좁은 창은 세로 스크롤, 넓고 낮은 창은 행 간격을 줄인 2열 |
+
+표의 크기는 브라우저 테스트 입력이다. Tesla가 공개한 제품 정보는 화면 크기와 방향 확인에 사용했다. 표시 배율과 차량 UI가 차지하는 영역에 따라 CSS 뷰포트는 달라질 수 있다. [Model 3](https://www.tesla.com/model3) · [Model Y 디스플레이](https://www.tesla.com/en_gb/blog/introducing-new-model-y-performance) · [Model S/X 디스플레이](https://www.tesla.com/support/videos/watch/displays-meet-your-model-s) · [초기형 Model S 터치스크린](https://www.tesla.com/sites/default/files/tesla-model-s.pdf) · [Cybertruck](https://www.tesla.com/ko_kr/cybertruck)
+
+창 너비 800 CSS px, 높이 440 CSS px, 너비 대 높이 6:5를 기준으로 세로 배치와 2열 배치를 전환한다. 2열의 코스 열에는 최소·최대 너비를 두고, 7:4 이상에서는 지형에 더 많은 공간을 배정한다. 주요 버튼은 높이 56–76 CSS px를 확보한다. 실제 차량 브라우저의 표시와 조작감은 실차 확인이 필요하다.
+
 ## 2. 차량 순정 내비게이션 경로
 
 타사 지도 길찾기 API를 사용하지 않는다. 서버의 `RoadProvider`는 현재 목 추정만 제공한다. Tesla Fleet API는 목적지와 경유지 전달 명령을 문서화하지만, 사용자 선택 전 여러 후보의 전체 왕복 경로를 순정 내비로 탐색해 앱에 반환하는 기능은 확인되지 않았다. 명령의 요청 형식과 지원 조건도 미확인이라 전송은 차단되어 있다.

@@ -36,7 +36,19 @@ export function createTerrainView({canvas,host,labelLayer,onStatus=()=>{},isInte
  if(gpu)renderer.render(scene,camera);else{const dpr=Math.min(devicePixelRatio,1.5);if(canvas.width!==Math.round(w*dpr)||canvas.height!==Math.round(h*dpr)){canvas.width=Math.round(w*dpr);canvas.height=Math.round(h*dpr)}ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,w,h);const items=meshItems.map(item=>{const pts=item.points.map(projectedPoint);return{item,pts,z:pts.reduce((s,q)=>s+q.z,0)/pts.length}}).sort((a,b)=>a.item.layer-b.item.layer||b.z-a.z);
  for(const {item,pts}of items){if(item.type==='line'){ctx.strokeStyle='#9caf87';ctx.globalAlpha=item.alpha;ctx.lineWidth=.65;ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);ctx.lineTo(pts[1].x,pts[1].y);ctx.stroke();ctx.globalAlpha=1}else if(item.type==='marker'){const a=pts[0],b=projectedPoint(item.points[0].clone().add(p(0,.55,0)));ctx.strokeStyle='#d3cfa8';ctx.lineWidth=1.3;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();ctx.fillStyle='#'+item.color.getHexString();ctx.beginPath();ctx.arc(b.x,b.y,3.5,0,Math.PI*2);ctx.fill()}else{ctx.beginPath();pts.forEach((q,i)=>i?ctx.lineTo(q.x,q.y):ctx.moveTo(q.x,q.y));ctx.closePath();ctx.fillStyle='#'+item.color.getHexString();ctx.fill();ctx.strokeStyle=ctx.fillStyle;ctx.lineWidth=.45;ctx.stroke()}}
  if(car){const q=projectedPoint(p(car.x,car.y+.12,car.z));ctx.fillStyle='#fff0d2';ctx.strokeStyle='#213a2c';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(q.x,q.y,4.5,0,Math.PI*2);ctx.fill();ctx.stroke()}}
- const projected=labels.map(a=>({...a,v:projectedPoint(a.p)}));const placed=[];for(const {label,v}of projected){let x=Math.max(80,Math.min(w-90,v.x)),y=Math.max(165,Math.min(h-155,v.y));for(const other of placed)if(Math.abs(x-other.x)<140&&Math.abs(y-other.y)<42)y=Math.max(160,y-44);placed.push({x,y});label.style.left=x+'px';label.style.top=y+'px'}
+ // The terrain canvas now has its own space between the header and controls.
+ const projected=labels.map(({label,p})=>({label,point:projectedPoint(p),width:label.offsetWidth,height:label.offsetHeight}));
+ const placed=[];
+ for(const {label,point,width,height} of projected){
+  const left=Math.max(4,Math.min(w-width-4,point.x-width/2));
+  let bottom=Math.max(height+4,Math.min(h-4,point.y));
+  for(const other of placed){
+   if(left>=other.right+4||left+width+4<=other.left||bottom-height>=other.bottom+4||bottom+4<=other.top)continue;
+   bottom=other.top>=height+8?other.top-4:Math.min(h-4,other.bottom+height+4);
+  }
+  placed.push({left,right:left+width,top:bottom-height,bottom});
+  label.style.left=left+width/2+'px';label.style.top=bottom+'px';
+ }
  const n=projectedPoint(p(0,0,-5)),c=projectedPoint(p(0,0,0)),compass=document.querySelector('.map-compass svg');if(compass)compass.style.transform=`rotate(${Math.atan2(n.x-c.x,-(n.y-c.y))}rad)`;dirty=false;}
  function resize(){if(gpu)renderer.setSize(host.clientWidth,host.clientHeight,false);if(model){baseDist=fitDistance();dist=baseDist}dirty=true}const resizeObserver=new ResizeObserver(resize);resizeObserver.observe(host);
  function setTourButton(){const b=document.querySelector('#tourBtn');b.classList.toggle('active',touring);b.innerHTML=touring?'<span>Ⅱ</span><span>잠시 멈추기</span>':'<span>▷</span><span>미리 달리기</span>';b.setAttribute('aria-label',touring?'코스 미리 달리기 일시 정지':'코스 미리 달리기')}

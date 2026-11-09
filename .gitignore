@@ -2,6 +2,10 @@
 __pycache__/
 *.py[cod]
 
+# Local address data
+*.osm.pbf
+addresses.sqlite*
+
 # Java / Maven
 backend/target/
 .m2/

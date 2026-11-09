@@ -27,7 +27,7 @@ class PleosNavi(context: Context, private val emit: (Event) -> Unit) {
         data class Error(val message: String) : Event()
         data class Destination(val latitude: Double, val longitude: Double) : Event()
         data class Waypoints(val coordinates: List<Pair<Double, Double>>) : Event()
-        data class Location(val latitude: Double, val longitude: Double) : Event()
+        data class Location(val latitude: Double, val longitude: Double, val address: String?) : Event()
         data class Arrived(val name: String) : Event()
     }
     private val helper = NaviHelper(context.applicationContext)
@@ -41,7 +41,8 @@ class PleosNavi(context: Context, private val emit: (Event) -> Unit) {
         override fun onRouteEnded() = emit(Event.SearchCompleted)
         override fun onDestinationInfo(destinationInfo: DestinationInfo) = emit(Event.Destination(destinationInfo.latitude, destinationInfo.longitude))
         override fun onWayPointInfo(waypointInfo: List<WaypointInfo>) = emit(Event.Waypoints(waypointInfo.map { it.latitude to it.longitude }))
-        override fun onCurrentLocationInfo(currentLocationInfo: CurrentLocationInfo) = emit(Event.Location(currentLocationInfo.latitude, currentLocationInfo.longitude))
+        override fun onCurrentLocationInfo(currentLocationInfo: CurrentLocationInfo) =
+            emit(Event.Location(currentLocationInfo.latitude, currentLocationInfo.longitude, currentLocationInfo.address))
         override fun onDestinationArrived(destinationArrivedInfo: DestinationArrivedInfo) = emit(Event.Arrived(destinationArrivedInfo.name))
         override fun onDestinationChanged() = emit(Event.RouteChanged)
         override fun onWaypointChanged(waypointChangedInfo: WaypointChangedInfo) = emit(Event.RouteChanged)

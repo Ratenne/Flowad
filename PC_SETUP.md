@@ -25,17 +25,33 @@ Tesla 공개 개발자 문서에서 차량 브라우저용 권장 CSS는 확인�
 
 | 중앙 화면 유형 | 브라우저 재현 크기 | 레이아웃 |
 | --- | --- | --- |
-| Model 3/Y 15–15.4인치 가로형 | 1920×1200, 1254×784 (DPR 1.53) | 코스 열 약 34vw와 지형을 나란히 배치 |
+| Model 3/Y 15–15.4인치 가로형 | 1920×1200, 1254×784 (DPR 1.53) | 코스 열과 지형을 나란히 배치 |
 | Model S/X 후기형 가로 화면 | 2200×1300 | 코스 열과 지형을 나란히 배치 |
-| Model 3/Y 16인치 가로형, Cybertruck 18.5인치 가로형 | 2560×1440, 2650×1440 | 넓은 비율에서 코스 열을 약 30vw로 줄이고 지형을 넓힘 |
-| Model S/X 초기형 세로 화면 | 1200×1920 | 코스 목록 다음에 지형 배치 |
-| 좁거나 높이가 낮은 브라우저 창 | 773×601, 1280×480 | 좁은 창은 세로 스크롤, 넓고 낮은 창은 행 간격을 줄인 2열 |
+| Model 3/Y 16인치 가로형, Cybertruck 18.5인치 가로형 | 2560×1440, 2650×1440 | 코스 열 너비를 제한해 지형을 넓힘 |
+| Model S/X 초기형 세로 화면 | 1200×1920 | 코스 카드 세 장을 한 줄에 배치하고 지형은 아래에 표시 |
+| 작은 가로형 브라우저 창 | 773×601, 1280×480 | 코스와 지형을 나란히 표시 |
 
 표의 크기는 브라우저 테스트 입력이다. Tesla가 공개한 제품 정보는 화면 크기와 방향 확인에 사용했다. 표시 배율과 차량 UI가 차지하는 영역에 따라 CSS 뷰포트는 달라질 수 있다. [Model 3](https://www.tesla.com/model3) · [Model Y 디스플레이](https://www.tesla.com/en_gb/blog/introducing-new-model-y-performance) · [Model S/X 디스플레이](https://www.tesla.com/support/videos/watch/displays-meet-your-model-s) · [초기형 Model S 터치스크린](https://www.tesla.com/sites/default/files/tesla-model-s.pdf) · [Cybertruck](https://www.tesla.com/ko_kr/cybertruck)
 
-창 너비 800 CSS px, 높이 440 CSS px, 너비 대 높이 6:5를 기준으로 세로 배치와 2열 배치를 전환한다. 2열의 코스 열에는 최소·최대 너비를 두고, 7:4 이상에서는 지형에 더 많은 공간을 배정한다. 주요 버튼은 높이 56–76 CSS px를 확보한다. 실제 차량 브라우저의 표시와 조작감은 실차 확인이 필요하다.
+창 너비 740 CSS px, 높이 420 CSS px, 너비 대 높이 6:5를 기준으로 세로 배치와 2열 배치를 전환한다. 2열의 코스 열에는 최소·최대 너비를 두고, 7:4 이상에서는 지형에 더 많은 공간을 배정한다. 주요 버튼은 높이 48–56 CSS px를 확보한다. 날씨, 충전, 코스 선택, 지형 재생 아이콘은 앱에 포함된 SVG를 사용한다. 실제 차량 브라우저의 표시와 조작감은 실차 확인이 필요하다.
 
 ## 2. 차량 순정 내비게이션 경로
+
+현재 위치 주소는 Pleos Android 앱의 **차량 상태 · 현재 주소 조회**에서 NaviHelper의 `CurrentLocationInfo.address`를 사용한다. 이 필드는 현재 주소 문자열이며 건물명과 도로명주소가 별도로 제공되지 않는다. [Pleos NaviHelper](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.data/current-location-info/entry)
+
+웹은 브라우저 GPS 또는 동의한 Tesla 차량 좌표를 Flowad 서버의 로컬 주소 인덱스와 대조한다. 건물 안에서는 등록된 건물명과 도로명주소를 차례로 확인하고, 주소가 있는 건물이나 지점까지 25m 이내인 경우에는 **가까운 주소**로 표시한다. 데이터가 없거나 조회하지 못해도 코스 추천은 계속한다. 좌표는 주소 조회를 위해 외부 지도 서비스로 전송하거나 서버에 저장하지 않는다.
+
+주소 인덱스를 준비하려면 [Geofabrik 한국 추출본](https://download.geofabrik.de/asia/south-korea.html)의 `.osm.pbf`를 내려받고, 저장소 루트에서 아래 명령을 실행한다. 데이터가 바뀌면 같은 방식으로 인덱스를 다시 생성한다. 인덱스에는 공개 건물 도형과 주소 지점, 건물명, 도로명주소가 들어간다. OpenStreetMap의 지역별 등록 현황에 따라 누락된 주소나 건물이 있을 수 있다. 인덱스와 원본 데이터는 Git에 포함하지 않는다. 서비스에 인덱스를 사용하거나 배포할 때는 ODbL의 출처 표시 및 파생 데이터베이스 제공 조건을 따른다. [© OpenStreetMap contributors · ODbL](https://www.openstreetmap.org/copyright)
+
+```powershell
+python -m pip install "osmium>=4,<5" "shapely>=2,<3"
+$addressData = Join-Path $env:LOCALAPPDATA "Flowad/address-data"
+python scripts/build-address-index.py "$addressData/south-korea.osm.pbf" "$addressData/addresses.sqlite"
+$env:ADDRESS_INDEX_PATH = "$addressData/addresses.sqlite"
+mvn -f backend/pom.xml spring-boot:run
+```
+
+위 예시는 `south-korea.osm.pbf`를 `%LOCALAPPDATA%\Flowad\address-data`에 저장한 경우다. 배포 서버에는 생성한 SQLite 파일을 제공하고 `ADDRESS_INDEX_PATH`를 실제 경로로 설정한다.
 
 타사 지도 길찾기 API를 사용하지 않는다. 서버의 `RoadProvider`는 현재 목 추정만 제공한다. Tesla Fleet API는 목적지와 경유지 전달 명령을 문서화하지만, 사용자 선택 전 여러 후보의 전체 왕복 경로를 순정 내비로 탐색해 앱에 반환하는 기능은 확인되지 않았다. 명령의 요청 형식과 지원 조건도 미확인이라 전송은 차단되어 있다.
 

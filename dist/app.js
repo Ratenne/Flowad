@@ -1,6 +1,6 @@
 import {createLocationService, validCoordinates} from './location-service.js';
 import {assessBattery} from './battery.js';
-import {haversine,routeFromOrigin,weatherAt,departureTimestamp} from './engine.js';
+import {routeFromOrigin,weatherAt,departureTimestamp} from './engine.js';
 import {routes} from './courses.js';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const icon=(name,cls='')=>`<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
@@ -12,10 +12,12 @@ const locationService=createLocationService({
 });
 let locationRevision=0;
 let teslaFallbackAbort=null;
+let addressAbort=null;
 function invalidateLocationWork(){
  locationRevision++;
  locationService.cancel();
  teslaFallbackAbort?.abort();
+ addressAbort?.abort();
  weatherRequest++;
  weatherAbort?.abort();
  recommendationRequest++;
@@ -37,7 +39,10 @@ const timeText=m=>`${Math.floor(m/60)}시간${m%60?' '+m%60+'분':''}`;
 const effectiveRoutes=()=>routes.map(r=>routeFromOrigin(r,state.location));
 const courseMinutes=r=>r.apiMinutes ?? (r.minutes-($('#walking').checked?0:r.walk));
 const weatherName=w=>({sunny:'맑음',cloudy:'흐림',rainy:'비'}[w]||'흐림');
-const weatherIcon=w=>({sunny:'☀',cloudy:'☁',rainy:'☂'}[w]||'☁');
+function setWeatherIcon(weather){
+  const name={sunny:'sun',cloudy:'cloud',rainy:'rain'}[weather]||'cloud';
+  $('#weatherIcon use').setAttribute('href','#i-'+name);
+}
 const formatKST=t=>new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(t));
 function toast(msg){$('#toast').textContent=msg;$('#toast').classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').classList.remove('visible'),3200)}
 function evPlan(r){const b=teslaBatteryReading;const battery=b?b.batteryPercent:+$('#battery').value,remaining=b?b.estimatedRangeKm:(+$('#range').value*battery/100),observedAt=b?b.observedAt:Date.now();const assessment=assessBattery({routeStatus:r.route?.status,distanceKm:r.route?.distanceKm,batteryPercent:battery,remainingRangeKm:remaining,reservePercent:+$('#reserve').value,observedAt});return {...assessment,charge:assessment.status==='CHARGING_MAY_BE_NEEDED',battery,remaining,source:b?'Tesla 캐시':'사용자 입력'};}
@@ -70,7 +75,20 @@ const selected=[];const remaining=[...candidates];while(remaining.length&&select
 function activeCourse(){return recommendations.find(r=>r.id===state.selected)||effectiveRoutes().find(r=>r.id===state.selected)}
 function canPreview(){return recommendations.some(r=>r.id===state.selected)||state.tab==='saved'&&saved.has(state.selected)}
 function render(){const list=state.tab==='saved'?effectiveRoutes().filter(r=>saved.has(r.id)):recommendations;
-$('#routeCards').innerHTML=list.map((r,i)=>`<article class="route-card ${state.selected===r.id?'active':''}"><button class="route-select" data-preview="${r.id}" aria-label="${r.name}, ${timeText(courseMinutes(r))}, 왕복 약 ${r.km}킬로미터" aria-pressed="${state.selected===r.id}"><span class="route-index">${String(i+1).padStart(2,'0')}</span><div class="route-copy"><span>${r.area}${state.vehicle==='ev'&&evPlan(r).charge?' · ϟ 충전 계획':i===0&&state.tab==='all'?' · 오늘의 추천':''}</span><h2>${r.name}</h2><div class="route-meta"><span>${timeText(courseMinutes(r))}</span><span>${r.km}km</span></div></div><span class="selected-check" aria-hidden="true">✓</span></button></article>`).join('');
+$('#routeCards').innerHTML=list.map(route=>{
+  const selected=state.selected===route.id;
+  const duration=timeText(courseMinutes(route));
+  const charge=state.vehicle==='ev'&&evPlan(route).charge;
+  return `<article class="route-card ${selected?'active':''}">
+    <button class="route-select" data-preview="${route.id}" aria-label="${route.name}, ${route.area}, ${duration}, 왕복 약 ${route.km}킬로미터${charge?', 충전 계획':''}" aria-pressed="${selected}">
+      <div class="route-copy">
+        <h2>${route.name}</h2>
+        <div class="route-meta"><span>${route.area}</span><span>· ${duration} · ${route.km}km</span>${charge?`<span class="charge-note">${icon('bolt')}충전 계획</span>`:''}</div>
+      </div>
+      ${icon('check','selected-check')}
+    </button>
+  </article>`;
+}).join('');
 document.body.classList.toggle('has-courses',!!list.length);$('#routeCards').hidden=!list.length;$('#locationEmpty').hidden=!!state.location||state.tab==='saved';$('#emptyState').hidden=state.tab!=='saved'||!!list.length;$('#noMatch').hidden=state.tab!=='all'||!state.location||!!list.length;
 $('#savedCount').textContent=saved.size?String(saved.size):'';$('#recommendationCount').textContent=recommendations.length;$('#allTab').classList.toggle('selected',state.tab==='all');$('#allTab').setAttribute('aria-pressed',state.tab==='all');$('#savedNav').classList.toggle('selected',state.tab==='saved');$('#savedNav').setAttribute('aria-pressed',state.tab==='saved');
 $('#resultsTitle').innerHTML=state.tab==='saved'?'저장한 길':state.location?'오늘의 추천':'지금 여기서,<br> 좋은 길로.';$('#panelEyebrow').textContent=state.tab==='saved'?'YOUR COLLECTION':state.location?'YOUR NEXT DRIVE':'A LITTLE DETOUR';
@@ -78,7 +96,7 @@ $('#resultsSubtitle').innerHTML=state.tab==='saved'?'다시 만나고 싶은 풍
 syncFooter();syncSelection(false);
 }
 function syncFooter(){const mode={now:'지금 출발',morning:'아침 출발',afternoon:'오후 출발',sunset:'노을 무렵 출발'}[$('#departure').value];$('#tripContextLabel').textContent=mode+' · 왕복 '+(+$('#duration').value===480?'하루':(+$('#duration').value/60)+'시간');$('#vehicleLabel').textContent=state.vehicle==='ev'?'전기차 · 배터리 '+$('#battery').value+'%':'일반 차량';$('#mainActionText').textContent=state.locating?'위치 확인 중…':state.location?'주변 코스 다시 찾기':'내 위치에서 코스 찾기';$$('[data-duration]').forEach(b=>{const on=b.dataset.duration===$('#duration').value;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$('#iceNote').hidden=state.vehicle==='ev';syncSteppers()}
-function syncSelection(updateScene=true){const r=activeCourse(),valid=canPreview();$('#selectedDetail').hidden=!valid;$('#heroLocate').hidden=valid;$$('[data-preview]').forEach(b=>{const on=b.dataset.preview===state.selected;b.setAttribute('aria-pressed',on);b.closest('.route-card').classList.toggle('active',on)});if(!r||!valid)return;$('#selectedDetail').setAttribute('aria-label',r.name+' 자세히 보기');$('#sceneCaption').textContent=r.name;showTerrainSummary(r.id);if(r.route?.terrainStatus==='UNAVAILABLE'){$('#sceneSubcaption').textContent='이 코스의 3D 지형 데이터가 없어요.';}const w=weatherFor(r);$('#weatherIcon').textContent=weatherIcon(w.weather);$('#sceneTemp').textContent=w.temp+'°';$('#sceneWeatherText').textContent=(w.time?'도착 무렵 '+weatherName(w.weather):'예시 · '+weatherName(w.weather))+' · '+w.wind+'m/s';if(updateScene&&sceneAPI){sceneAPI.setRoute(r);sceneAPI.weather(w)}$('#driveArea').textContent=r.area;$('#driveName').textContent=r.name;$('#driveTime').textContent=timeText(courseMinutes(r));$('#driveKm').textContent=r.km+'km';$('#driveStop').textContent=r.spots[Math.min(2,r.spots.length-2)][0];}
+function syncSelection(updateScene=true){const r=activeCourse(),valid=canPreview();$('#selectedDetail').hidden=!valid;$('#heroLocate').hidden=valid;$$('[data-preview]').forEach(b=>{const on=b.dataset.preview===state.selected;b.setAttribute('aria-pressed',on);b.closest('.route-card').classList.toggle('active',on)});if(!r||!valid)return;$('#selectedDetail').setAttribute('aria-label',r.name+' 자세히 보기');$('#sceneCaption').textContent=r.name;showTerrainSummary(r.id);if(r.route?.terrainStatus==='UNAVAILABLE'){$('#sceneSubcaption').textContent='이 코스의 3D 지형 데이터가 없어요.';}const w=weatherFor(r);setWeatherIcon(w.weather);$('#sceneTemp').textContent=w.temp+'°';$('#sceneWeatherText').textContent=(w.time?'도착 무렵 '+weatherName(w.weather):'예시 · '+weatherName(w.weather))+' · '+w.wind+'m/s';if(updateScene&&sceneAPI){sceneAPI.setRoute(r);sceneAPI.weather(w)}$('#driveArea').textContent=r.area;$('#driveName').textContent=r.name;$('#driveTime').textContent=timeText(courseMinutes(r));$('#driveKm').textContent=r.km+'km';$('#driveStop').textContent=r.spots[Math.min(2,r.spots.length-2)][0];}
 function selectRoute(id){if(!effectiveRoutes().some(r=>r.id===id))return;state.selected=id;syncSelection();syncFooter()}
 async function updateResults(){
  if(state.locating||state.weatherSource==='loading')return;
@@ -98,14 +116,14 @@ async function updateResults(){
 function saveRoute(id){saved.has(id)?saved.delete(id):saved.add(id);let ok=true;try{localStorage.setItem('gilgyeol-saved',JSON.stringify([...saved]))}catch{ok=false}render();if(detailId===id&&$('#detailDialog').open){const b=$('#detailDialog [data-save]');const on=saved.has(id);b.classList.toggle('saved',on);b.setAttribute('aria-pressed',on);b.innerHTML=icon('bookmark')+(on?'저장됨':'저장하기')}toast(ok?(saved.has(id)?'저장한 길에 담았어요.':'저장한 길에서 지웠어요.'):'이번 세션에 저장했어요. 브라우저 보관은 사용할 수 없어요.')}
 function setTab(tab){if(tab==='saved')cancelLocationRequest();state.tab=tab;const list=tab==='saved'?effectiveRoutes().filter(r=>saved.has(r.id)):recommendations;if(list.length&&!list.some(r=>r.id===state.selected))state.selected=list[0].id;render();syncSelection();$('#resultStatus').textContent=tab==='saved'?'이 브라우저에 저장된 코스입니다.':state.location?'현재 위치에서 출발 · 거리·시간 추정':''}
 function weatherFor(r){if(state.weatherSource==='live'){const index=routes.findIndex(x=>x.id===r.id)+1;const arrival=departureTimestamp($('#departure').value)+(r.km/2/55*60)*60000;const w=weatherAt(state.forecasts[index],arrival);if(w)return w}return{weather:state.weather,temp:state.temp,wind:state.wind,severe:false}}
-function paintWeather(){const live=state.weatherSource==='live';$('#weatherIcon').textContent=weatherIcon(state.weather);$('#sceneTemp').textContent=state.temp+'°';$('#sceneWeatherText').textContent=(live?'예보 · ':'예시 · ')+weatherName(state.weather)+' · '+state.wind+'m/s';$('#tempValue').textContent=state.temp+'°C';$('#windValue').textContent=state.wind+'m/s';$('#temperature').value=state.temp;$('#wind').value=state.wind;$$('[data-weather]').forEach(b=>{const on=b.dataset.weather===state.weather;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$('#dataSourceLabel').textContent=live?'Open-Meteo 예보 · 거리·시간 추정':state.weatherSource==='manual'?'설정한 날씨 · 거리·시간 추정':state.weatherSource==='loading'?'예보 조회 중 · 예시 날씨':state.weatherSource==='error'?'예보 조회 실패 · 예시 날씨 적용':state.location?.kind==='demo'?'서울 체험 위치 · 예시 날씨':'위치 대기 · 예시 코스 10개';$('#sourcePill').textContent=live?'예보 반영':state.weatherSource==='loading'?'예보 조회 중':state.location?.kind==='demo'?'체험 코스':state.weatherSource==='manual'?'설정 날씨':'코스 탐색';$('#weatherModeInfo').textContent=live?'출발지와 도착 무렵의 코스 주변 예보를 반영합니다. 직접 바꾸면 시뮬레이션으로 전환합니다.':state.weatherSource==='error'?'예보를 불러오지 못했습니다. 현재 날씨는 예시입니다.':state.weatherSource==='manual'?'직접 설정한 날씨로 추천하고 있습니다.':'현재 위치 확인 후 예보를 조회합니다. 지금은 예시 날씨입니다.';syncSteppers();sceneAPI?.weather(state)}
+function paintWeather(){const live=state.weatherSource==='live';setWeatherIcon(state.weather);$('#sceneTemp').textContent=state.temp+'°';$('#sceneWeatherText').textContent=(live?'예보 · ':'예시 · ')+weatherName(state.weather)+' · '+state.wind+'m/s';$('#tempValue').textContent=state.temp+'°C';$('#windValue').textContent=state.wind+'m/s';$('#temperature').value=state.temp;$('#wind').value=state.wind;$$('[data-weather]').forEach(b=>{const on=b.dataset.weather===state.weather;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$('#dataSourceLabel').textContent=live?'Open-Meteo 예보 · 거리·시간 추정':state.weatherSource==='manual'?'설정한 날씨 · 거리·시간 추정':state.weatherSource==='loading'?'예보 조회 중 · 예시 날씨':state.weatherSource==='error'?'예보 조회 실패 · 예시 날씨 적용':state.location?.kind==='demo'?'서울 체험 위치 · 예시 날씨':'위치 대기 · 예시 코스 10개';$('#sourcePill').textContent=live?'예보 반영':state.weatherSource==='loading'?'예보 조회 중':state.location?.kind==='demo'?'체험 코스':state.weatherSource==='manual'?'설정 날씨':'코스 탐색';$('#weatherModeInfo').textContent=live?'출발지와 도착 무렵의 코스 주변 예보를 반영합니다. 직접 바꾸면 시뮬레이션으로 전환합니다.':state.weatherSource==='error'?'예보를 불러오지 못했습니다. 현재 날씨는 예시입니다.':state.weatherSource==='manual'?'직접 설정한 날씨로 추천하고 있습니다.':'현재 위치 확인 후 예보를 조회합니다. 지금은 예시 날씨입니다.';syncSteppers();sceneAPI?.weather(state)}
 function updateWeather(){state.weatherSource='manual';state.originSevere=false;weatherRequest++;weatherAbort?.abort();paintWeather();updateResults()}
 function openDialog(d){if(state.drivingPreview){toast('정차 화면에서 설정할 수 있어요.');return}$$('dialog[open]').forEach(x=>x.close());d.showModal();document.body.classList.add('modal-open')}
 function showSettings(page='trip'){setSettingsTab(page);openDialog($('#settingsDialog'))}
 function setSettingsTab(page){state.settingsTab=page;$$('[data-setting-tab]').forEach(b=>{const on=b.dataset.settingTab===page;b.classList.toggle('selected',on);b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1});['trip','vehicle','weather'].forEach(key=>$('#settings'+key[0].toUpperCase()+key.slice(1)).hidden=page!==key);$('.settings-content').scrollTop=0}
 function syncSteppers(){$$('[data-step]').forEach(b=>{const [id,amount]=b.dataset.step.split(':'),input=$('#'+id);const v=+input.value;b.disabled=+amount<0?v<=+input.min:v>=+input.max})}
 function renderDetail(id){const r=recommendations.find(x=>x.id===id)||effectiveRoutes().find(x=>x.id===id);if(!r)return;detailId=id;const min=courseMinutes(r),ep=evPlan(r);const departure=departureTimestamp($('#departure').value);const stops=r.spots.map((s,i)=>{const t=new Date(departure+Math.round(min*i/(r.spots.length-1))*60000);const time=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(t);return `<li><small>${time} · ${i===0?'출발':i===r.spots.length-1?'복귀':'경유 '+i}</small><b>${safeText(s[0])}</b><p>${!$('#walking').checked&&i===2?'잠시 정차해 차창 풍경을 즐겨요.':safeText(s[1])}</p></li>`}).join('');
-$('#detailContent').innerHTML=`<header class="detail-top"><div><p class="overline">${r.area} · COURSE DETAIL</p><h2>${r.name}</h2><p>${r.tags.join(' · ')}</p></div><button class="dialog-close" data-close-detail aria-label="코스 상세 닫기">${icon('close')}</button></header><div class="detail-scroll"><div><div class="detail-metrics"><div><span>코스 예상</span><strong>${timeText(min)}</strong></div><div><span>왕복 거리</span><strong>약 ${r.km}km · ${r.route?.status==='ROAD_ROUTED'?'도로 경로':'추정'}</strong></div></div><h3 class="detail-section-title">이 길을 고른 이유</h3><ul class="detail-reasons">${(r.apiReasons||reasons(r)).slice(0,4).map(t=>`<li>${t}</li>`).join('')}</ul>${state.vehicle==='ev'?`<div class="ev-box"><strong>ϟ ${evText(ep)}</strong>${ep.source} · 배터리 ${ep.battery}% · 예상 잔여 ${Number.isFinite(ep.remaining)?Math.round(ep.remaining):'미제공'}km · 예비 ${$('#reserve').value}%<br>충전소 정보는 별도 확인이 필요합니다. 실제 호환성·운영 상태와 충전 시간은 미확인입니다.<br><button class="button-secondary" data-mock-chargers="${r.id}">모의 충전소 확인</button><p id="mockChargingResult"></p></div>`:''}</div><div><h3 class="detail-section-title" style="margin-top:0">이렇게 다녀와요</h3><ol class="timeline">${stops}</ol><p class="detail-notice">${r.route?.warnings?.map(safeText).join(" ")||"저장된 코스는 전체 경로가 계산되지 않았습니다."}<br>${r.route?.status==='ROAD_ROUTED'?'전체 왕복은 도로 제공자의 거리와 예상 시간입니다. 차량 통행 가능 여부와 도착 시간은 바뀔 수 있습니다.':'전체 왕복은 직선거리 기반 추정이며 도로 경로선이 없습니다.'} 3D의 실제 고도와 도로선은 기존 코스의 일부 하이라이트 구간이며 전체 왕복 경로가 아닙니다. 경유지 진입과 현재 통행 가능 여부는 확인되지 않았습니다.</p></div><section class="vehicle-access tesla-navigation"><h3>Tesla 내비로 보내기</h3><p>설정 → 차량에서 Tesla 로그인 후 차량을 선택하세요. 전체 경유지 일괄 전송은 미지원입니다. 차량 내비에서 경유지를 직접 추가하거나, 한 지점을 새 목적지로 지정할 수 있습니다.</p><button class="button-secondary" data-tesla-preview="${id}">전송할 경로 확인</button><div id="teslaNavigationPreview" role="status"></div></section></div><footer class="detail-footer"><button class="detail-save ${saved.has(id)?'saved':''}" data-save="${id}" aria-pressed="${saved.has(id)}">${icon('bookmark')}${saved.has(id)?'저장됨':'저장하기'}</button>${window.FlowadNative && r.navigationTicket ? `<button class="button-secondary" data-native-route="${safeText(id)}">차량 내비로 보내기</button>` : ""}<button class="button-primary" data-drive-detail="${id}">주행 화면 체험${icon('arrow')}</button></footer>`;
+$('#detailContent').innerHTML=`<header class="detail-top"><div><p class="overline">${r.area} · COURSE DETAIL</p><h2>${r.name}</h2><p>${r.tags.join(' · ')}</p></div><button class="dialog-close" data-close-detail aria-label="코스 상세 닫기">${icon('close')}</button></header><div class="detail-scroll"><div><div class="detail-metrics"><div><span>코스 예상</span><strong>${timeText(min)}</strong></div><div><span>왕복 거리</span><strong>약 ${r.km}km · ${r.route?.status==='ROAD_ROUTED'?'도로 경로':'추정'}</strong></div></div><h3 class="detail-section-title">이 길을 고른 이유</h3><ul class="detail-reasons">${(r.apiReasons||reasons(r)).slice(0,4).map(t=>`<li>${t}</li>`).join('')}</ul>${state.vehicle==='ev'?`<div class="ev-box"><strong>${icon('bolt')}${evText(ep)}</strong>${ep.source} · 배터리 ${ep.battery}% · 예상 잔여 ${Number.isFinite(ep.remaining)?Math.round(ep.remaining):'미제공'}km · 예비 ${$('#reserve').value}%<br>충전소 정보는 별도 확인이 필요합니다. 실제 호환성·운영 상태와 충전 시간은 미확인입니다.<br><button class="button-secondary" data-mock-chargers="${r.id}">모의 충전소 확인</button><p id="mockChargingResult"></p></div>`:''}</div><div><h3 class="detail-section-title" style="margin-top:0">이렇게 다녀와요</h3><ol class="timeline">${stops}</ol><p class="detail-notice">${r.route?.warnings?.map(safeText).join(" ")||"저장된 코스는 전체 경로가 계산되지 않았습니다."}<br>${r.route?.status==='ROAD_ROUTED'?'전체 왕복은 도로 제공자의 거리와 예상 시간입니다. 차량 통행 가능 여부와 도착 시간은 바뀔 수 있습니다.':'전체 왕복은 직선거리 기반 추정이며 도로 경로선이 없습니다.'} 3D의 실제 고도와 도로선은 기존 코스의 일부 하이라이트 구간이며 전체 왕복 경로가 아닙니다. 경유지 진입과 현재 통행 가능 여부는 확인되지 않았습니다.</p></div><section class="vehicle-access tesla-navigation"><h3>Tesla 내비로 보내기</h3><p>설정 → 차량에서 Tesla 로그인 후 차량을 선택하세요. 전체 경유지 일괄 전송은 미지원입니다. 차량 내비에서 경유지를 직접 추가하거나, 한 지점을 새 목적지로 지정할 수 있습니다.</p><button class="button-secondary" data-tesla-preview="${id}">전송할 경로 확인</button><div id="teslaNavigationPreview" role="status"></div></section></div><footer class="detail-footer"><button class="detail-save ${saved.has(id)?'saved':''}" data-save="${id}" aria-pressed="${saved.has(id)}">${icon('bookmark')}${saved.has(id)?'저장됨':'저장하기'}</button>${window.FlowadNative && r.navigationTicket ? `<button class="button-secondary" data-native-route="${safeText(id)}">차량 내비로 보내기</button>` : ""}<button class="button-primary" data-drive-detail="${id}">주행 화면 체험${icon('arrow')}</button></footer>`;
 }
 function showDetail(id){selectRoute(id);renderDetail(id);openDialog($('#detailDialog'))}
 function setDrivingPreview(on){if(on&&!canPreview()){toast('먼저 현재 위치에서 코스를 추천받아 주세요.');return}if(on){cancelLocationRequest();$$('dialog[open]').forEach(d=>d.close());sceneAPI?.pause();syncSelection()}state.drivingPreview=on;document.body.classList.toggle('drive-preview',on);$('#driveSummary').hidden=!on;$('#returnParked').hidden=!on;$('#driveModeBtn').setAttribute('aria-pressed',on);$('#modeLabel').textContent=on?'주행 UI 미리보기':'정차 화면';$('#modeIndicator').textContent=on?'D':'P';$('#sourcePill').textContent=on?'차량 연동 없음':state.weatherSource==='live'?'예보 반영':'코스 탐색';$('#routePanel').inert=on;$('#terrainCanvas').tabIndex=on?-1:0;$('.app-rail').inert=on;$('#driveModeBtn').setAttribute('aria-label',on?'정차 화면으로 돌아가기':'주행 화면 미리보기');if(on)$('#returnParked').focus();else $('#driveModeBtn').focus()}
@@ -139,6 +157,41 @@ function describeOrigin(location){
  if(location.kind==='demo')return '체험 모드 · 서울 시청 부근 출발';
  return location.label+' 중심 출발';
 }
+function paintLocation(location){
+ const label=location.addressLabel||location.label;
+ const weather={live:'주변 예보 반영',error:'예시 날씨 적용'}[state.weatherSource];
+ $('#locationLabel').textContent=label;
+ $('#locationLabel').title=label;
+ $('#locationStatus').textContent=[location.addressLabel,describeOrigin(location),weather].filter(Boolean).join(' · ');
+}
+async function lookupLocationAddress(location){
+ const revision=locationRevision;
+ const controller=new AbortController();
+ addressAbort=controller;
+ const timeout=setTimeout(()=>controller.abort(),4000);
+ let label='주소 미확인';
+ try{
+  const response=await fetch('./api/location/address',{
+   method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
+   body:JSON.stringify({latitude:location.lat,longitude:location.lng})
+  });
+  if(response.ok&&response.status!==204){
+   const match=await response.json();
+   if(typeof match.label==='string'&&match.label.trim()){
+    if(match.type==='BUILDING'||match.type==='ROAD_ADDRESS')label=match.label;
+    if(match.type==='NEARBY_ADDRESS')label='가까운 주소 · '+match.label;
+   }
+  }
+ }catch{
+  // Location and recommendations are usable even when address lookup fails.
+ }finally{
+  clearTimeout(timeout);
+  if(addressAbort===controller)addressAbort=null;
+ }
+ if(revision!==locationRevision||state.location!==location)return;
+ location.addressLabel=label;
+ paintLocation(location);
+}
 function applyLocation(location){
  invalidateLocationWork();
  setLocating(false);
@@ -149,10 +202,11 @@ function applyLocation(location){
  state.wind=2;
  state.weather='sunny';
  recommendations=[];
- $('#locationLabel').textContent=location.label;
- $('#locationStatus').textContent=describeOrigin(location);
+ const lookupAddress=location.kind==='gps'||location.kind==='tesla';
+ if(lookupAddress)location.addressLabel='주소 확인 중…';
+ state.weatherSource=location.kind==='demo'?'demo':'loading';
+ paintLocation(location);
  if(location.kind==='demo'){
-  state.weatherSource='demo';
   paintWeather();
   updateResults();
  }else{
@@ -162,6 +216,7 @@ function applyLocation(location){
   $('#resultStatus').textContent='출발 위치 확인 · 주변 예보 조회 중…';
   loadWeather();
  }
+ if(lookupAddress)lookupLocationAddress(location);
 }
 function cancelLocationRequest(){
  if(!state.locating)return;
@@ -179,6 +234,7 @@ async function requestLocation(){
  state.tab='all';
  recommendations=[];
  $('#locationLabel').textContent='현재 위치 확인 중';
+ $('#locationLabel').title='';
  setLocating(true);
  render();
  $('#locationStatus').textContent='고정밀 GPS 위치를 확인하고 있어요…';
@@ -186,10 +242,7 @@ async function requestLocation(){
  try{
   const fix=await locationService.request();
   if(revision!==locationRevision)return;
-  const nearest=departureCities().map(city=>({...city,distance:haversine(fix,city)}))
-   .sort((a,b)=>a.distance-b.distance)[0];
-  const label=nearest&&nearest.distance<40?'현재 위치 · '+nearest.name+' 인근':'현재 위치';
-  applyLocation({...fix,label,kind:'gps'});
+  applyLocation({...fix,label:'현재 위치',kind:'gps'});
   if($('#locationDialog').open)$('#locationDialog').close();
  }catch(error){
   if(revision!==locationRevision)return;
@@ -262,7 +315,7 @@ window.addEventListener('pagehide',cancelLocationRequest);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelLocationRequest()});
 $('#locationDialog').addEventListener('close',cancelLocationRequest);
 function applyOriginWeather(){if(!state.forecasts.length)return;const w=weatherAt(state.forecasts[0],departureTimestamp($('#departure').value));if(w){state.temp=w.temp;state.wind=w.wind;state.weather=w.weather;state.originSevere=w.severe}}
-async function loadWeather(){if(!state.location)return;const token=++weatherRequest;weatherAbort?.abort();weatherAbort=new AbortController();const controller=weatherAbort;const timeout=setTimeout(()=>controller.abort(),14000);state.weatherSource='loading';paintWeather();const locations=[{lat:Math.round(state.location.lat*100)/100,lng:Math.round(state.location.lng*100)/100},...routes];const params=new URLSearchParams({latitude:locations.map(p=>p.lat).join(','),longitude:locations.map(p=>p.lng).join(','),hourly:'temperature_2m,wind_speed_10m,weather_code',wind_speed_unit:'ms',timeformat:'unixtime',timezone:'Asia/Seoul',forecast_days:'2'});try{const response=await fetch('https://api.open-meteo.com/v1/forecast?'+params,{signal:controller.signal,referrerPolicy:'no-referrer'});if(!response.ok)throw new Error('Forecast request failed');const forecasts=await response.json();if(token!==weatherRequest)return;if(!Array.isArray(forecasts)||forecasts.length!==locations.length||forecasts.some(s=>!weatherAt(s,Date.now())))throw new Error('Incomplete forecast response');state.forecasts=forecasts;state.weatherSource='live';applyOriginWeather();paintWeather();updateResults();$('#locationStatus').textContent=describeOrigin(state.location)+' · 주변 예보 반영';}catch(error){if(token!==weatherRequest)return;state.weatherSource='error';state.forecasts=[];state.originSevere=false;paintWeather();updateResults();$('#locationStatus').textContent=describeOrigin(state.location)+' · 예시 날씨 적용';}finally{clearTimeout(timeout)}}
+async function loadWeather(){if(!state.location)return;const token=++weatherRequest;weatherAbort?.abort();weatherAbort=new AbortController();const controller=weatherAbort;const timeout=setTimeout(()=>controller.abort(),14000);state.weatherSource='loading';paintWeather();const locations=[{lat:Math.round(state.location.lat*100)/100,lng:Math.round(state.location.lng*100)/100},...routes];const params=new URLSearchParams({latitude:locations.map(p=>p.lat).join(','),longitude:locations.map(p=>p.lng).join(','),hourly:'temperature_2m,wind_speed_10m,weather_code',wind_speed_unit:'ms',timeformat:'unixtime',timezone:'Asia/Seoul',forecast_days:'2'});try{const response=await fetch('https://api.open-meteo.com/v1/forecast?'+params,{signal:controller.signal,referrerPolicy:'no-referrer'});if(!response.ok)throw new Error('Forecast request failed');const forecasts=await response.json();if(token!==weatherRequest)return;if(!Array.isArray(forecasts)||forecasts.length!==locations.length||forecasts.some(s=>!weatherAt(s,Date.now())))throw new Error('Incomplete forecast response');state.forecasts=forecasts;state.weatherSource='live';applyOriginWeather();paintWeather();updateResults();paintLocation(state.location);}catch(error){if(token!==weatherRequest)return;state.weatherSource='error';state.forecasts=[];state.originSevere=false;paintWeather();updateResults();paintLocation(state.location);}finally{clearTimeout(timeout)}}
 function initLocationControls(){['locateBtn','emptyLocate','retryLocation'].forEach(id=>$('#'+id).addEventListener('click',requestLocation));$('#manualLocation').addEventListener('click',()=>{cancelLocationRequest();$('#locationRecovery').textContent='';renderCities();openDialog($('#locationDialog'))});$('#citySearch').addEventListener('input',renderCities);$('#cityChoices').addEventListener('click',e=>{const b=e.target.closest('[data-city]');if(!b)return;const c=departureCities().find(c=>c.name===b.dataset.city);$('#locationDialog').close();applyLocation({lat:c.lat,lng:c.lng,label:c.name,kind:'manual'})});$('#demoBtn').addEventListener('click',()=>applyLocation({lat:37.5665,lng:126.978,label:'서울 체험 위치',kind:'demo'}));$('#restoreWeather').addEventListener('click',()=>{if(!state.location){toast('먼저 출발 위치를 알려주세요.');return}if(state.forecasts.length){state.weatherSource='live';applyOriginWeather();paintWeather();updateResults()}else loadWeather()});renderCities()}
 
 // Tesla: explicit user actions only; no polling or automatic wake.

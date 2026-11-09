@@ -5,7 +5,7 @@ import ai.pleos.playground.vehicle.Vehicle
 import ai.pleos.playground.vehicle.api.model.capability.AccessType
 
 /** Field names match TeslaIntegration.Reading. Missing data remains null. */
-data class VehicleReading(val status: String, val batteryPercent: Int?, val estimatedRangeKm: Double?, val observedAt: Long?, val stale: Boolean, val latitude: Double?, val longitude: Double?, val locationStatus: String)
+data class VehicleReading(val status: String, val batteryPercent: Int?, val estimatedRangeKm: Double?, val observedAt: Long?, val stale: Boolean, val latitude: Double?, val longitude: Double?, val locationStatus: String, val navigationAddress: String? = null)
 class PleosVehicleAdapter(context: Context) {
     private val vehicle = Vehicle(context.applicationContext)
     @Volatile private var closed = false

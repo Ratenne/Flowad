@@ -63,7 +63,7 @@ class MainActivity : Activity() {
         root.addView(discard)
         retryWeb = Button(this).apply { text = "화면 다시 불러오기"; visibility = View.GONE; setOnClickListener { if (restriction.canInteract()) { if (rendererGone) recreate() else { webFailed = false; web.reload(); render() } } } }
         root.addView(retryWeb)
-        vehicleButton = Button(this).apply { text = "차량 상태 조회"; setOnClickListener {
+        vehicleButton = Button(this).apply { text = "차량 상태 · 현재 주소 조회"; setOnClickListener {
             if (canAct()) {
                 vehicleReading = VehicleReading("NO_DATA", null, null, null, true, null, null, "NO_DATA")
                 val token = ++vehicleRequest
@@ -76,7 +76,12 @@ class MainActivity : Activity() {
                 } catch (_: Exception) { }
                 main.postDelayed({ if (!destroyed && token == vehicleRequest && canAct()) {
                     val reading = vehicleReading
-                    showConfirm("차량 상태", "배터리 ${reading.batteryPercent?.toString() ?: "미제공"}% · 잔여 주행거리 미제공\n위치 ${if (reading.locationStatus == "LIVE") "조회됨" else "미제공"}\n누락된 값은 웹 설정에서 직접 입력해 주세요.") { }
+                    val location = when {
+                        reading.locationStatus != "LIVE" -> "위치 미제공"
+                        reading.navigationAddress == null -> "위치 조회됨 · 주소 미제공"
+                        else -> reading.navigationAddress
+                    }
+                    showConfirm("차량 상태", "배터리 ${reading.batteryPercent?.toString() ?: "미제공"}% · 잔여 주행거리 미제공\nPleos 내비 현재 위치: $location\n누락된 배터리 정보는 웹 설정에서 직접 입력해 주세요.") { }
                 } }, 5000)
             }
         } }
@@ -209,8 +214,13 @@ class MainActivity : Activity() {
                 }
             }
             is PleosNavi.Event.Location -> {
-                if (event.latitude.isFinite() && event.latitude in -90.0..90.0 && event.longitude.isFinite() && event.longitude in -180.0..180.0)
-                    vehicleReading = vehicleReading.copy(status = "LIVE", observedAt = System.currentTimeMillis(), stale = false, latitude = event.latitude, longitude = event.longitude, locationStatus = "LIVE")
+                if (event.latitude.isFinite() && event.latitude in -90.0..90.0 && event.longitude.isFinite() && event.longitude in -180.0..180.0) {
+                    vehicleReading = vehicleReading.copy(
+                        status = "LIVE", observedAt = System.currentTimeMillis(), stale = false,
+                        latitude = event.latitude, longitude = event.longitude, locationStatus = "LIVE",
+                        navigationAddress = event.address?.trim()?.takeIf { it.isNotEmpty() }
+                    )
+                }
             }
             is PleosNavi.Event.Destination -> {
                 val trip = journey

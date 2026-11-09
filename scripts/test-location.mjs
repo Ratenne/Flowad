@@ -149,6 +149,7 @@ pending[0].resolve(reply(99));
 await old;
 assert.equal(context.recommendations[0].km, 25);
 assert.equal(context.state.location.kind, 'gps');
+assert.equal(context.state.location.label, '현재 위치');
 const acceptedTesla = get('#teslaLocation').click();
 finishTesla({status:'LIVE', latitude: 35, longitude: 129, observedAt: Date.now()});
 await acceptedTesla;
@@ -192,3 +193,27 @@ assert.equal(statusLookups, 3);
 assert.equal(teslaLookups, 4);
 assert.equal(context.state.location, null);
 console.log('PASS: location accuracy, age, retries, permission, cancellation, duplicate clicks, stale API responses and GPS/Tesla source separation.');
+
+const addressLookups = [];
+const addressContext = vm.createContext({
+  state: {location: null}, locationRevision: 0, addressAbort: null,
+  $: get, AbortController, setTimeout, clearTimeout,
+  fetch(url, options) {
+    assert.equal(url, './api/location/address');
+    assert.equal(options.method, 'POST');
+    return new Promise(resolve => addressLookups.push(resolve));
+  }
+});
+vm.runInContext(slice('function describeOrigin(location)', 'function applyLocation(location)'), addressContext);
+function requestAddress(location) {
+  addressContext.state.location = location;
+  addressContext.locationRevision++;
+  return vm.runInContext('lookupLocationAddress(state.location)', addressContext);
+}
+const oldAddress = requestAddress({...gps, kind:'gps'});
+const newAddress = requestAddress({...gps, kind:'tesla'});
+addressLookups[1]({ok:true,status:200,json:async()=>({type:'NEARBY_ADDRESS',label:'테스트로 25'})});
+await newAddress;
+addressLookups[0]({ok:true,status:200,json:async()=>({type:'BUILDING',label:'이전 건물'})});
+await oldAddress;
+assert.equal(get('#locationLabel').textContent, '가까운 주소 · 테스트로 25');

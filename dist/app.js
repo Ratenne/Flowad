@@ -163,7 +163,21 @@ function paintLocation(location){
  $('#locationLabel').textContent=label;
  $('#locationLabel').title=label;
  $('#locationStatus').textContent=[location.addressLabel,describeOrigin(location),weather].filter(Boolean).join(' · ');
+ $('#jusoMapButton').hidden=location.kind!=='gps'&&location.kind!=='tesla';
 }
+$('#jusoMapButton').addEventListener('click',()=>{
+ const location=state.location;
+ if(state.drivingPreview||state.locating||!location||!['gps','tesla'].includes(location.kind))return;
+ const form=$('#jusoMapForm');
+ form.elements.latitude.value=location.lat;
+ form.elements.longitude.value=location.lng;
+ openDialog($('#jusoMapDialog'));
+ form.requestSubmit();
+ form.reset();
+});
+$('#jusoMapDialog').addEventListener('close',()=>{
+ if(!$('#jusoMapDialog').open)$('#jusoMapFrame').src='about:blank';
+});
 async function lookupLocationAddress(location){
  const revision=locationRevision;
  const controller=new AbortController();
@@ -231,6 +245,7 @@ async function requestLocation(){
  invalidateLocationWork();
  const revision=locationRevision;
  state.location=null;
+ $('#jusoMapButton').hidden=true;
  state.tab='all';
  recommendations=[];
  $('#locationLabel').textContent='현재 위치 확인 중';

@@ -399,6 +399,7 @@ const navigationErrors={
  INVALID_TICKET:'추천 티켓이 만료됐습니다. 코스를 다시 추천받아 주세요.',
  INVALID_CSRF:'Tesla 연결 전이거나 세션이 만료됐습니다. 설정 → 차량에서 로그인 상태를 확인하세요.',
  PROVIDER_UNAVAILABLE:'도로 서버가 기동 중이거나 응답하지 않습니다. 잠시 후 직접 다시 시도해 주세요.',
+ RATE_LIMIT:'도로 제공자의 요청 제한 상태입니다. 잠시 후 직접 다시 확인해 주세요.',
  WAYPOINT_TOO_FAR_FROM_ROAD:'도로와 연결할 수 없는 경유지가 있습니다. 이 코스는 차량으로 보낼 수 없습니다.',
  NO_ROAD_ROUTE:'경유지 사이의 도로가 연결되지 않습니다. 다른 코스를 선택하세요.',
  PLAN_EXPIRED:'전송 계획이 만료되었거나 차량이 바뀌었습니다. 다시 확인하세요.',

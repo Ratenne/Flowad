@@ -1,0 +1,23 @@
+{
+  // Prepared only. Deploy this configuration and change the route ONLY after approval.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flowad-api-stage2",
+  "account_id": "8840227b6eb94fdbb655f3a662bf55d8",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": true, "redact_query_string": true, "logs": { "enabled": true, "invocation_logs": true } },
+  "assets": { "directory": "../dist", "binding": "ASSETS", "run_worker_first": true },
+  "vars": {
+    "FREE_PLAN_MODE": "true",
+    "ROAD_ROUTING_URL": "https://flowad-roads.onrender.com",
+    "SAFE_UPSTREAM_DIAGNOSTICS": "true",
+    "API_PREFIX": "/flowad",
+    "FRONTEND_URL": "https://ravirgo.com/flowad/",
+    "ALLOWED_ORIGINS": "https://ravirgo.com",
+    "TESLA_REDIRECT_URI": "https://ravirgo.com/flowad/api/tesla/callback"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "flowad-workers-stage2", "database_id": "3a0191de-08ae-4850-8157-ccb5bf022152", "migrations_dir": "migrations" }],
+  "triggers": { "crons": ["*/30 * * * *"] }
+}

@@ -1,0 +1,23 @@
+{
+  // PUBLIC TEST KEYS ONLY. This file is exclusively for local workerd.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flowad-api-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "ALLOWED_ORIGINS": "http://localhost:8787,http://127.0.0.1:8787",
+    "FRONTEND_URL": "http://localhost:8787/",
+    "API_PREFIX": "",
+    "TOKEN_ENCRYPTION_KEY": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    "NAVIGATION_TICKET_SECRET": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQE=",
+    "TESLA_CLIENT_ID": "",
+    "TESLA_CLIENT_SECRET": "",
+    "TESLA_REDIRECT_URI": "",
+    "ROAD_ROUTING_URL": "",
+    "TESLA_COMMAND_PROXY_URL": "",
+    "JUSO_MAP_API_KEY": ""
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "flowad", "migrations_dir": "migrations" }]
+}

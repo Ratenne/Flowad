@@ -11,11 +11,16 @@ if(mode==='--approved-cutover'){
   const vars=Object.fromEntries(ready.bindings.filter(b=>b.type==='plain_text').map(b=>[b.name,b.text]));
   if(vars.FRONTEND_URL!=='https://ravirgo.com/flowad/'||vars.TESLA_REDIRECT_URI!=='https://ravirgo.com/flowad/api/tesla/callback'||vars.API_PREFIX!=='/flowad')throw new Error('Production frontend/callback/prefix must be explicitly prepared before cutover.');
   if(vars.FREE_PLAN_MODE!=='true')throw new Error('Explicit free-plan payload guard is required.');
+  if(vars.OSRM_BATCH_URL)throw new Error('Batch adapter must not be an operating dependency.');
+  if(vars.ROAD_ROUTING_URL!=='https://flowad-roads.onrender.com')throw new Error('Selected-route provider must remain the existing OSRM service.');
   const secrets=new Set(ready.bindings.filter(b=>b.type==='secret_text').map(b=>b.name));
   for(const name of ['TOKEN_ENCRYPTION_KEY','NAVIGATION_TICKET_SECRET','TESLA_CLIENT_ID','TESLA_CLIENT_SECRET'])if(!secrets.has(name))throw new Error('Required secret binding missing: '+name);
   if(!ready.bindings.some(b=>b.type==='d1'&&b.name==='DB'&&b.id==='3a0191de-08ae-4850-8157-ccb5bf022152'))throw new Error('Unexpected production D1 binding.');
   const health=await fetch('https://flowad-api-stage2.o94777.workers.dev/flowad/api/tesla/status',{signal:AbortSignal.timeout(15000)});
   if(health.status!==200)throw new Error('Live session/D1 smoke check failed. Route not changed.');
+  const recommendation=await fetch('https://flowad-api-stage2.o94777.workers.dev/flowad/api/recommendations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({latitude:37.5665,longitude:126.978,availableMinutes:180,scenery:'forest',vehicleType:'ice'}),signal:AbortSignal.timeout(15000)});
+  const data=await recommendation.json();
+  if(recommendation.status!==200||!data.courses?.length||data.courses.some(c=>c.route?.status!=='ESTIMATED_NOT_ROAD_ROUTED'))throw new Error('Estimated recommendation policy smoke check failed. Route not changed.');
 }
 const target=mode==='--rollback'?'flowad-path-proxy':'flowad-api-stage2';
 await cf(`/zones/${zone}/workers/routes/${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern,script:target,request_limit_fail_open:false})});

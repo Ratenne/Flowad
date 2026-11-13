@@ -99,7 +99,7 @@ function syncFooter(){const mode={now:'지금 출발',morning:'아침 출발',af
 function syncSelection(updateScene=true){const r=activeCourse(),valid=canPreview();$('#selectedDetail').hidden=!valid;$('#heroLocate').hidden=valid;$$('[data-preview]').forEach(b=>{const on=b.dataset.preview===state.selected;b.setAttribute('aria-pressed',on);b.closest('.route-card').classList.toggle('active',on)});if(!r||!valid)return;$('#selectedDetail').setAttribute('aria-label',r.name+' 자세히 보기');$('#sceneCaption').textContent=r.name;showTerrainSummary(r.id);if(r.route?.terrainStatus==='UNAVAILABLE'){$('#sceneSubcaption').textContent='이 코스의 3D 지형 데이터가 없어요.';}const w=weatherFor(r);setWeatherIcon(w.weather);$('#sceneTemp').textContent=w.temp+'°';$('#sceneWeatherText').textContent=(w.time?'도착 무렵 '+weatherName(w.weather):'예시 · '+weatherName(w.weather))+' · '+w.wind+'m/s';if(updateScene&&sceneAPI){sceneAPI.setRoute(r);sceneAPI.weather(w)}$('#driveArea').textContent=r.area;$('#driveName').textContent=r.name;$('#driveTime').textContent=timeText(courseMinutes(r));$('#driveKm').textContent=r.km+'km';$('#driveStop').textContent=r.spots[Math.min(2,r.spots.length-2)][0];}
 function selectRoute(id){if(!effectiveRoutes().some(r=>r.id===id))return;state.selected=id;syncSelection();syncFooter()}
 async function updateResults(){
- if(state.locating||state.weatherSource==='loading')return;
+ if(state.locating)return;
  const token=++recommendationRequest; recommendationAbort?.abort(); state.tab='all';
  if(!state.location){recommendations=[];render();return}
  const controller=new AbortController(); recommendationAbort=controller; const timer=setTimeout(()=>controller.abort(),120000);
@@ -229,6 +229,8 @@ function applyLocation(location){
   $('#noMatch').hidden=true;
   $('#resultStatus').textContent='출발 위치 확인 · 주변 예보 조회 중…';
   loadWeather();
+  // Show explicitly labelled example-weather estimates while forecasts load.
+  updateResults();
  }
  if(lookupAddress)lookupLocationAddress(location);
 }

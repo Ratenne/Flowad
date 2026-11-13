@@ -5,5 +5,5 @@ export default defineConfig({
     wrangler:{configPath:'./wrangler.local.jsonc'},
     miniflare:{bindings:{TEST_MIGRATIONS:await readD1Migrations('./migrations')},d1Databases:['ADDRESS_DB']}
   }))],
-  test:{setupFiles:['./test/setup.ts'],fileParallelism:false,testTimeout:20000}
+  test:{include:['test/**/*.test.ts'],setupFiles:['./test/setup.ts'],fileParallelism:false,testTimeout:20000}
 });

@@ -1,6 +1,6 @@
 # 2단계 최종 추천·도로 검증 정책
 
-상태: 구현·테스트 배포·실환경 기능 검증 완료, 운영 Route 전환 승인 대기. 최신 테스트 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final). 후속 문서/검증 스크립트 commit과 실제 운영 전환 결과는 추가 기록한다.
+상태: 구현·테스트 배포·실환경 기능 검증 완료, 운영 Route 전환 승인 대기. 초기 기능 검증 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final). 후속 릴리스·문서 commit과 실제 운영 전환 결과는 추가 기록한다.
 
 ## 기본 추천
 
@@ -20,7 +20,7 @@ Tesla `/navigation/preview`는 기존 courseId/좌표 요청도 받되 새 ticke
 
 ## 검증 및 운영 절차
 
-현재 TypeScript/Lint 및 Workers110개 테스트 통과. 기존 Java 계약27개 포함. 엔진·10개3D terrain 자산 테스트 통과, app.js syntax 통과. 실환경 검증과 운영 전환은 별도 기록한다. Mock을 실제 API 검증으로 표시하지 않는다.
+현재 TypeScript/Lint 및 Workers111개 테스트 통과. 기존 Java 계약27개 포함. 엔진·10개3D terrain 자산 테스트 통과, app.js syntax 통과. 로그인 전/차량 미선택을 구분하며 실제 도로 검증 전에 두 경우 모두 provider/차량 API를 호출하지 않는 테스트를 포함한다. 실환경 검증과 운영 전환은 별도 기록한다. Mock을 실제 API 검증으로 표시하지 않는다.
 
 Wrangler 로컬 HTTP17건도 통과했다. 테스트 HTTPS에서 기본 추천200/3개, 기상 전체 제외10개, 기존 HMAC resolve200, 변조 티켓 거절400, 양평 실제 OSRM 검증200/ROAD_ROUTE_VERIFIED/새 티켓 resolve200, 파주 NoSegment400/ROAD_ROUTE_UNAVAILABLE, 도로 실패 뒤 기본 추천200을 확인했다. 원격 D1 schema/index read-only 조회 및 익명 session 읽기/쓰기 정상. 상세 private evidence는 로컬 보존하고 공개 요약만 validation에 둔다.
 

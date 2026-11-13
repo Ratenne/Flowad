@@ -5,6 +5,11 @@ import {Sessions} from '../src/repository';
 import {now} from '../src/utils';
 async function recommendation(e=config(),extra={}){const r=await call('/api/recommendations',{...base,availableMinutes:1440,...extra},{env:e});return (await r.json() as {courses:{id:string;navigationTicket:string;route:{status:string}}[]}).courses[0];}
 function roads(url:string){const u=new URL(url);expect(u.searchParams.get('steps')).toBe('false');expect(u.searchParams.get('overview')).toBe('false');expect(u.searchParams.get('radiuses')).toBe('100;100;100;100;100');const coords=u.pathname.split('/').at(-1)!.split(';').map(v=>v.split(',').map(Number));return json({code:'Ok',waypoints:coords.map(c=>({distance:6,location:[c[0],c[1]+.00005]})),routes:[{legs:coords.slice(1).map(()=>({distance:30000,duration:1800}))}]});}
+it('distinguishes an anonymous session from a connected account with no selected vehicle',async()=>{
+ const e=config({TESLA_CLIENT_ID:'public',TESLA_CLIENT_SECRET:'public',TESLA_REDIRECT_URI:'https://flowad.test/api/tesla/callback',ROAD_ROUTING_URL:'https://roads.test'}),fn=external(roads),input={courseId:'yangpyeong',latitude:37.5665,longitude:126.978};
+ const anonymous=await authenticated({tokens:undefined},e);expect(await(await anonymous.post('navigation/preview',input)).json()).toEqual({error:'NOT_CONNECTED'});
+ const connected=await authenticated({selected:undefined},e);expect(await(await connected.post('navigation/preview',input)).json()).toEqual({error:'NO_VEHICLE_SELECTED'});expect(fn).not.toHaveBeenCalled();
+});
 it('does not call OSRM or batch for any of ten candidates even when both are configured',async()=>{
  const fn=external(()=>{throw Error('provider unavailable');}),e=config({ROAD_ROUTING_URL:'https://roads.test',OSRM_BATCH_URL:'https://batch.test',FREE_PLAN_MODE:'true'});
  const c=await recommendation(e);expect(c.route.status).toBe('ESTIMATED_NOT_ROAD_ROUTED');expect(fn).not.toHaveBeenCalled();expect((await resolve(c.navigationTicket,e.NAVIGATION_TICKET_SECRET)).route.status).toBe('ESTIMATED_NOT_ROAD_ROUTED');

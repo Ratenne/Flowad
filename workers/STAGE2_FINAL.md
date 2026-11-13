@@ -2,6 +2,8 @@
 
 상태: 구현·테스트 배포·실환경 기능 검증 완료, 운영 Route 전환 승인 대기. 초기 기능 검증 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final). 후속 릴리스·문서 commit과 실제 운영 전환 결과는 추가 기록한다.
 
+최종 승인 검토용 릴리스: 소스 `2ed6874`, 테스트 Worker 버전 `47a59815-239b-4095-ab62-955b580a97da` (2026-11-13). 고정된 detached checkout에서 배포했다. 후속 HTTP 재검사에서 기본 추천200/3개/모두 추정 상태, 익명 D1 session200, 같은 session의 Tesla preview400/NOT_CONNECTED를 확인했다. 차량 명령은0건이다. 타입 검사·Lint·Wrangler dry-run build가 통과했다. 현재 운영 Route는 여전히 `flowad-path-proxy`이며 승인 전에는 변경하지 않는다. 이번 최종 정책의 실제 Cloudflare CPU 안정성은 새로 측정하지 않았으므로 NOT_VERIFIED다. 이전 Batch CPU 결과를 새 정책의 실측 결과로 사용하지 않는다.
+
 ## 기본 추천
 
 `POST /api/recommendations`는 설정된 ROAD_ROUTING_URL/OSRM_BATCH_URL과 무관하게 외부 도로 API를 호출하지 않는다. 원래 후보10개·Haversine×1.18·평균55km/h·정차/산책 예산·기상 제외·점수/다양성·EV 입력의 의미를 유지한다. route.status는기존 `ESTIMATED_NOT_ROAD_ROUTED`다. route.points/legs/navigationTicket은 유지한다. 실제 도로가 없으므로 batteryStatus는 기존 ROAD_ROUTE_REQUIRED로 보수적으로 표시하며 실제 EV 주행을 보장하지 않는다.

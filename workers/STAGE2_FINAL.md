@@ -1,8 +1,26 @@
 # 2단계 최종 추천·도로 검증 정책
 
-상태: 구현·테스트 배포·실환경 기능 검증 완료, 운영 Route 전환 승인 대기. 초기 기능 검증 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final). 후속 릴리스·문서 commit과 실제 운영 전환 결과는 추가 기록한다.
+상태: DEPLOYED / REAL_API_VERIFIED(추천·선택 OSRM·D1·웹). 2026-11-13 사용자 명시 승인 후 운영 Route 전환 및 실제 HTTP/브라우저 검증 완료. CPU 안정성 및 새 운영 Tesla OAuth는 아래와 같이 별도 미검증 상태를 유지한다. 초기 기능 검증 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final).
 
-최종 승인 검토용 릴리스: 소스 `2ed6874`, 테스트 Worker 버전 `47a59815-239b-4095-ab62-955b580a97da` (2026-11-13). 고정된 detached checkout에서 배포했다. 후속 HTTP 재검사에서 기본 추천200/3개/모두 추정 상태, 익명 D1 session200, 같은 session의 Tesla preview400/NOT_CONNECTED를 확인했다. 차량 명령은0건이다. 타입 검사·Lint·Wrangler dry-run build가 통과했다. 현재 운영 Route는 여전히 `flowad-path-proxy`이며 승인 전에는 변경하지 않는다. 이번 최종 정책의 실제 Cloudflare CPU 안정성은 새로 측정하지 않았으므로 NOT_VERIFIED다. 이전 Batch CPU 결과를 새 정책의 실측 결과로 사용하지 않는다.
+최종 승인 검토용 릴리스: 소스 `2ed6874`, 테스트 Worker 버전 `47a59815-239b-4095-ab62-955b580a97da` (2026-11-13). 고정된 detached checkout에서 배포했다. 후속 HTTP 재검사에서 기본 추천200/3개/모두 추정 상태, 익명 D1 session200, 같은 session의 Tesla preview400/NOT_CONNECTED를 확인했다. 차량 명령은0건이다. 타입 검사·Lint·Wrangler dry-run build가 통과했다. 승인 당시 운영 Route는 `flowad-path-proxy`였으며 아래 승인 후 전환했다. 이번 최종 정책의 실제 Cloudflare CPU 안정성은 새로 측정하지 않았으므로 NOT_VERIFIED다. 이전 Batch CPU 결과를 새 정책의 실측 결과로 사용하지 않는다.
+
+## 운영 전환 결과 (2026-11-13)
+
+사용자가 CPU 미측정 등 공개한 미검증 사항을 전제로 "운영 전환 승인"했다. 동일한 고정 소스 `2ed6874daecb7784d2427351dab96b72a7086e1e`를 `wrangler.production.jsonc`로 배포했다. 운영 버전은 `339ee64d-2de0-4809-a992-135daaf9181e`다. 문서 후속 commit은 이 실행 소스를 바꾸지 않는다.
+
+- 운영 URL: https://ravirgo.com/flowad/
+- Route `ravirgo.com/flowad*`: `flowad-path-proxy` → `flowad-api-stage2`, Cloudflare readback 확인. 다른 Route/DNS/Pages 및 기존 Render 서비스는 변경하지 않았다.
+- 원격 D1과 기존 Secrets를 유지했다. 운영 frontend/origin/callback은 ravirgo.com으로 설정했다. Batch Adapter URL은 운영 binding에 없다.
+- 운영 HTTP 기능 검사13건: 기본 추천200/3개, 기상 제외10개, 잘못된 입력400, 기존 추정 티켓 resolve200, 변조 티켓 거절400, 양평 추천/실제 검증200/ROAD_ROUTE_VERIFIED/검증 티켓 resolve200, 파주 추천200/실제 NoSegment400, 도로 실패 후 기본 추천200, 익명 D1 session200, 웹200. 응답 상세는 `validation/final-production.json`에 민감 정보 없이 기록했다. 시간은 클라이언트 wall time이며 CPU가 아니다.
+- 추가 검사: 충전소 API200/ROAD_ROUTE_REQUIRED(실제 충전소 검증 아님), app.js200, 같은 Origin OPTIONS204, Secure/HttpOnly/SameSite=Lax session cookie, CSRF를 포함한 익명 Tesla preview400/NOT_CONNECTED.
+- 루트 사이트200, 기존 Tesla 공개키 URL200 및 SPKI DER 일치. 공개키를 교체하지 않았다.
+- 운영 Chrome 화면에서 서울 체험 추천·기존3D 하이라이트·수동 서울 출발·양평 실제 도로 검증 성공을 확인했다. 예시 출발 체험만으로는 전송을 허용하지 않는 처리도 확인했다. 실제 위치 권한을 요청하지 않았다.
+- Tesla: 이번 운영 OAuth/Fleet 재검증은 NOT_VERIFIED. 직전 테스트 로그인 취소와 11월12일 기존 성공 기록을 구분한다. 실차 명령0건(COMMAND_NOT_SENT), 차량 화면 NAVIGATION_NOT_CONFIRMED. 운영 주소에서 재로그인이 필요하다.
+- 무료 플랜: 설정·payload guard 유지, 관측한 기능 검사에서 제한 오류는 없었다. 요청별 CPU·메모리·일일 부하 안정성은 NOT_VERIFIED이며 안정화 완료로 주장하지 않는다. 선택 검증은 Render OSRM 절전/제한/timeout에 여전히 영향받고 명시적 실패·수동 재시도로 처리한다. Juso/주소 인덱스 및 실제 충전소 데이터도 미검증이다.
+
+2단계의 코드·운영 전환 작업은 완료했다. 3단계 진행을 위한 API 연결 기반은 준비됐으며 Android/Pleos 구현은 시작하지 않았다. 새 정책의 CPU 안정성, 운영 Tesla 재로그인·차량 접근 및 실차 검증은 남은 검증 사항이다.
+
+복구 명령: workers 디렉터리에서 `node scripts/switch-production-route.mjs --rollback`. 기존 프록시로 같은 Route만 되돌리며 기존 Render 절전 오류까지 해결하지는 않는다. 이번 전환에서는 복구 실행이 필요하지 않았다. Worker를 운영 사용 중일 때 테스트 config를 같은 Worker에 재배포하면 OAuth origin 설정도 바뀌므로 운영 config를 유지해야 한다.
 
 ## 기본 추천
 

@@ -14,6 +14,7 @@ dialog,.settings-dialog{
   max-height:calc(100dvh - 24px);
   max-width:calc(100% - 24px);
 }
+.location-summary { font-size:13px; line-height:1.65; color:var(--ink); margin:8px 0; overflow-wrap:anywhere; }
 .dialog-close,.settings-tabs button,.setting-row,.setting-row select,
 .mood-options button,.weather-types button,.location-setting button,.weather-source button,
 .location-body input,.city-choices button,.about-body>a,.detail-footer button,.detail-footer a {

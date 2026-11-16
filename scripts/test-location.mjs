@@ -38,7 +38,12 @@ const high = fake(fix(10));
 assert.equal((await high.service.request()).quality, 'HIGH');
 assert.deepEqual(high.counts, {first: 1, watch: 0, cleared: 0});
 assert.equal((await fake(fix(50)).service.request()).quality, 'MEDIUM');
-await assert.rejects(fake(fix(200)).service.request(), {code: 'LOW_ACCURACY'});
+assert.equal((await fake(fix(100)).service.request()).quality, 'MEDIUM');
+assert.equal((await fake(fix(200)).service.request()).quality, 'APPROXIMATE');
+assert.equal((await fake(fix(1000)).service.request()).quality, 'APPROXIMATE');
+await assert.rejects(fake(fix(1001)).service.request(), {code: 'LOW_ACCURACY'});
+await assert.rejects(fake(fix(200, 16000)).service.request(), {code: 'STALE'});
+assert.equal((await fake(fix(200), [fix(10)]).service.request()).quality, 'HIGH');
 const denied = fake(fix(10), [], 'denied');
 await assert.rejects(denied.service.request(), {code: 'DENIED'});
 assert.equal(denied.counts.first, 0);
@@ -80,20 +85,20 @@ const get = selector => {
   });
   return nodes.get(selector);
 };
-let finishFix, failFix, finishTesla, measurements = 0, teslaLookups = 0, statusLookups = 0;
-let fallbackReady = true;
+let finishFix, failFix, finishTesla, failTesla, measurements = 0, teslaLookups = 0, statusLookups = 0;
 let pagehide;
 const gps = {lat: 37.5, lng: 127, accuracy: 10, source: 'BROWSER_GPS'};
 const pending = [];
 const context = vm.createContext({
   state: {location: null, weatherSource: 'demo'}, locationRevision: 0,
-  teslaFallbackAbort: null,
+  teslaLocationAbort: null,
   recommendationRequest: 0, recommendationAbort: null, recommendations: [],
   $: get, render() {}, syncSelection() {}, setDrivingPreview() {},
+  publishLocationStatus(message) { get('#locationStatus').textContent=message; get('#mainLocationStatus').textContent=message; },
   setLocating(on) { context.state.locating = on; },
   invalidateLocationWork() {
     context.locationRevision++;
-    context.teslaFallbackAbort?.abort();
+    context.teslaLocationAbort?.abort();
     context.recommendationRequest++;
     context.recommendationAbort?.abort();
   },
@@ -109,11 +114,14 @@ const context = vm.createContext({
   fetch(url, options) {
     if(url==='./api/tesla/status'){
       statusLookups++;
-      return Promise.resolve({ok:true,json:async()=>({locationReady:fallbackReady,csrf:'test'})});
+      return Promise.resolve({ok:true,json:async()=>({
+        connection:'CONNECTED',locationReady:true,csrf:'test',secure:true
+      })});
     }
     return new Promise(resolve => pending.push({body: JSON.parse(options.body), resolve}));
   },
-  teslaPost() { teslaLookups++; return new Promise(resolve => { finishTesla = resolve; }); },
+  teslaPost() { teslaLookups++; return new Promise((resolve,reject) => { finishTesla = resolve; failTesla=reject; }); },
+  teslaError() {get('#teslaData').textContent='차량 위치 정보를 사용할 수 없습니다.';},
   validCoordinates, AbortController, setTimeout, clearTimeout
 });
 vm.runInContext(
@@ -162,36 +170,36 @@ await leaving;
 assert.equal(context.state.location, null);
 assert.equal(get('#resultStatus').textContent, '위치 확인을 취소했어요.');
 
-const fallback = vm.runInContext('requestLocation()', context);
-failFix({code:'LOW_ACCURACY'});
-await new Promise(resolve => setImmediate(resolve));
-assert.equal(teslaLookups, 3);
-finishTesla({status:'LIVE', latitude: 35, longitude: 129, observedAt: Date.now()});
-await fallback;
-assert.equal(context.state.location.kind, 'tesla');
-assert.equal(context.state.location.lat, 35);
+// Browser failures never query Tesla, regardless of failure reason.
+for(const code of ['LOW_ACCURACY','TIMEOUT','DENIED','UNAVAILABLE','STALE']){
+  const browser=vm.runInContext('requestLocation()',context);
+  failFix({code});
+  await browser;
+  assert.equal(context.state.location,null);
+  assert.equal(context.state.locating,false);
+  assert.match(get('#mainLocationStatus').textContent,/브라우저 위치/);
+}
+assert.equal(statusLookups,0);
+assert.equal(teslaLookups,2);
 
-const stale = vm.runInContext('requestLocation()', context);
-failFix({code:'TIMEOUT'});
-await new Promise(resolve => setImmediate(resolve));
-finishTesla({status:'LIVE', latitude: 35, longitude: 129, observedAt: Date.now()-61000});
-await stale;
-assert.equal(context.state.location, null);
-assert.match(get('#resultStatus').textContent, /Tesla 차량 위치도 오래됐어요/);
+const beforeVehicle=measurements;
+const staleVehicle=get('#teslaLocation').click();
+finishTesla({status:'LIVE',latitude:35,longitude:129,observedAt:Date.now()-901000});
+await staleVehicle;
+assert.equal(context.state.locating,false);
+assert.match(get('#mainLocationStatus').textContent,/오래됐거나/);
+const failedVehicle=get('#teslaLocation').click();
+failTesla(Error('LOCATION_UNAVAILABLE'));
+await failedVehicle;
+assert.equal(context.state.locating,false);
+assert.match(get('#locationLabel').textContent,/미확인/);
+assert.equal(measurements,beforeVehicle);
 
-const deniedFallback = vm.runInContext('requestLocation()', context);
-failFix({code:'DENIED'});
-await deniedFallback;
-assert.equal(statusLookups, 2);
-assert.equal(teslaLookups, 4);
-
-fallbackReady = false;
-const disconnected = vm.runInContext('requestLocation()', context);
-failFix({code:'UNAVAILABLE'});
-await disconnected;
-assert.equal(statusLookups, 3);
-assert.equal(teslaLookups, 4);
-assert.equal(context.state.location, null);
+const approximate = vm.runInContext('requestLocation()', context);
+finishFix({...gps, accuracy:500, quality:'APPROXIMATE'});
+await approximate;
+assert.equal(statusLookups, 0);
+assert.equal(context.state.location.quality, 'APPROXIMATE');
 console.log('PASS: location accuracy, age, retries, permission, cancellation, duplicate clicks, stale API responses and GPS/Tesla source separation.');
 
 const addressLookups = [];
@@ -217,3 +225,37 @@ await newAddress;
 addressLookups[0]({ok:true,status:200,json:async()=>({type:'BUILDING',label:'이전 건물'})});
 await oldAddress;
 assert.equal(get('#locationLabel').textContent, '가까운 주소 · 테스트로 25');
+
+const missingAddress=requestAddress({...gps,kind:'tesla',label:'Tesla 차량 위치',observedAt:Date.now()});
+addressLookups[2]({ok:false,status:503,headers:{get:()=> 'JUSO_NOT_CONFIGURED'}});
+await missingAddress;
+assert.equal(get('#locationLabel').textContent,'Tesla 차량 위치');
+assert.match(get('#mainLocationStatus').textContent,/도로명주소 서비스 승인키가/);
+assert.match(get('#mainLocationStatus').textContent,/좌표로 코스를 추천/);
+assert.match(get('#mainLocationStatus').textContent,/측정/);
+assert.doesNotMatch(get('#mainLocationStatus').textContent,/확인 중/);
+const emptyAddress=requestAddress({...gps,kind:'gps',label:'현재 위치'});
+addressLookups[3]({ok:true,status:204});
+await emptyAddress;
+assert.match(get('#mainLocationStatus').textContent,/등록된 주소가 없어요/);
+const officialAddress=requestAddress({...gps,kind:'gps',label:'현재 위치'});
+addressLookups[4]({ok:true,status:200,json:async()=>({type:'ROAD_ADDRESS',label:'테스트로 1',source:'JUSO_MAP'})});
+await officialAddress;
+assert.equal(get('#locationLabel').textContent,'테스트로 1');
+assert.match(get('#mainLocationStatus').textContent,/도로명주소 서비스 조회 결과/);
+const deniedAddress=requestAddress({...gps,kind:'tesla',label:'Tesla 차량 위치'});
+addressLookups[5]({ok:false,status:503,headers:{get:()=> 'JUSO_KEY_REJECTED'}});
+await deniedAddress;
+assert.equal(get('#locationLabel').textContent,'Tesla 차량 위치');
+assert.match(get('#mainLocationStatus').textContent,/승인키를 확인/);
+
+const coarseContext = vm.createContext({
+  state:{}, recommendations:[], $:get,
+  invalidateLocationWork(){}, setLocating(){}, paintWeather(){}, updateResults(){},
+  paintLocation(){}, render(){}, loadWeather(){},
+  lookupLocationAddress(){throw Error('Coarse coordinates must not identify an address');}
+});
+vm.runInContext(slice('function applyLocation(location)', 'function cancelLocationRequest()'), coarseContext);
+vm.runInContext("applyLocation({kind:'gps',quality:'APPROXIMATE',accuracy:500})", coarseContext);
+assert.equal(coarseContext.state.location.addressLabel, undefined);
+assert.match(vm.runInContext("describeOrigin({kind:'gps',quality:'APPROXIMATE',accuracy:500})", addressContext), /대략적인 위치/);

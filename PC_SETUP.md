@@ -39,21 +39,17 @@ Tesla 공개 개발자 문서에서 차량 브라우저용 권장 CSS는 확인�
 
 현재 위치 주소는 Pleos Android 앱의 **차량 상태 · 현재 주소 조회**에서 NaviHelper의 `CurrentLocationInfo.address`를 사용한다. 이 필드는 현재 주소 문자열이며 건물명과 도로명주소가 별도로 제공되지 않는다. [Pleos NaviHelper](https://document.pleos.ai/en/api-reference/connect-sdk-pleos/NaviHelper/navi-helper/ai.pleos.playground.navi.data/current-location-info/entry)
 
-웹은 브라우저 GPS 또는 동의한 Tesla 차량 좌표를 Flowad 서버의 로컬 주소 인덱스와 대조한다. 건물 안에서는 등록된 건물명과 도로명주소를 차례로 확인하고, 주소가 있는 건물이나 지점까지 25m 이내인 경우에는 **가까운 주소**로 표시한다. 데이터가 없거나 조회하지 못해도 코스 추천은 계속한다. 좌표는 주소 조회를 위해 외부 지도 서비스로 전송하거나 서버에 저장하지 않는다.
+웹은 브라우저 GPS 또는 동의한 Tesla 차량 좌표로 도로명주소 서비스를 조회한다. 주소를 조회하지 못해도 코스 추천은 계속한다. 주소 확인을 위해 좌표를 주소기반산업지원서비스로 전송하며 Flowad 서버에 저장하지 않는다.
 
-주소 인덱스를 준비하려면 [Geofabrik 한국 추출본](https://download.geofabrik.de/asia/south-korea.html)의 `.osm.pbf`를 내려받고, 저장소 루트에서 아래 명령을 실행한다. 데이터가 바뀌면 같은 방식으로 인덱스를 다시 생성한다. 인덱스에는 공개 건물 도형과 주소 지점, 건물명, 도로명주소가 들어간다. OpenStreetMap의 지역별 등록 현황에 따라 누락된 주소나 건물이 있을 수 있다. 인덱스와 원본 데이터는 Git에 포함하지 않는다. 서비스에 인덱스를 사용하거나 배포할 때는 ODbL의 출처 표시 및 파생 데이터베이스 제공 조건을 따른다. [© OpenStreetMap contributors · ODbL](https://www.openstreetmap.org/copyright)
+브라우저 위치는 15초 이내 측정값을 사용하며 추가 측정 후 오차가 100m 초과~1km 이내이면 **대략적인 위치**로 표시해 코스를 추천한다. 이 경우 건물 주소 조회와 주소 지도 버튼은 사용하지 않는다. 1km 초과 위치는 추천에 사용하지 않는다. 브라우저 GPS와 Tesla 차량 위치는 독립 조회하며 자동 전환하지 않는다. 설정 → 차량에서 위치 사용에 동의해 로그인하고 차량을 선택한 뒤 **차량 위치 조회**를 누르면 Tesla 좌표로 추천한다. 차량 위치는 응답의 `stale` 값과 측정 시각을 검증해 15분 이내 데이터만 사용한다. 메인 화면에는 출처·측정 시각·좌표·브라우저 정확도·주소 조회 상태를 표시한다.
 
-```powershell
-python -m pip install "osmium>=4,<5" "shapely>=2,<3"
-$addressData = Join-Path $env:LOCALAPPDATA "Flowad/address-data"
-python scripts/build-address-index.py "$addressData/south-korea.osm.pbf" "$addressData/addresses.sqlite"
-$env:ADDRESS_INDEX_PATH = "$addressData/addresses.sqlite"
-mvn -f backend/pom.xml spring-boot:run
-```
+주소 조회와 공식 지도에는 **지도제공 검색 API 승인키**인 `JUSO_MAP_API_KEY`를 사용한다. 실제 웹/API가 실행되는 Cloudflare Worker `flowad-api-stage2`의 Secret으로 설정한다. Spring Boot를 직접 실행하는 경우에는 해당 서버의 같은 이름 환경 변수로 설정한다. Render의 도로 전용 서비스 `flowad-roads`에는 설정하지 않는다. 서비스 URL은 사용자가 접속하는 Flowad 주소로 등록한다. 일반 주소 검색/주소→좌표 API 승인키와 혼용하지 않는다. [공식 신청 안내](https://www.data.go.kr/data/15096716/openapi.do)
 
-위 예시는 `south-korea.osm.pbf`를 `%LOCALAPPDATA%\Flowad\address-data`에 저장한 경우다. 배포 서버에는 생성한 SQLite 파일을 제공하고 `ADDRESS_INDEX_PATH`를 실제 경로로 설정한다.
+`POST /api/location/address`는 WGS84 위도·경도를 EPSG:5179로 변환하고 공식 지도 SDK가 사용하는 `https://business.juso.go.kr/addrlink/addrMapData.do`에 `searchType=1`로 요청한다. JSONP/XML을 실행하지 않고 파싱해 첫 도로명주소를 `{label,type:"ROAD_ADDRESS",source:"JUSO_MAP"}`으로 반환한다. 주소는 제공자의 좌표 검색 결과이며 건물 내부 위치를 증명하지 않는다. 별도 주소 DB·`ADDRESS_DB`·`ADDRESS_INDEX_PATH`는 사용하지 않는다. 이전 주소 인덱스 생성 스크립트는 현재 API와 연결되지 않는다.
 
-웹의 **설정 → 여정 → 공식 주소 지도 확인**은 주소기반산업지원서비스의 **지도제공 검색 API**를 사용한다. 개발용 또는 운영용 승인키를 발급받아 Render의 `JUSO_MAP_API_KEY`에 설정한다. 서비스 URL에는 사용자가 접속하는 Flowad 주소를 등록한다. 가이드 13쪽의 좌표 검색 방식에 따라 사용자가 지도를 열 때만 현재 좌표를 EPSG:5179로 변환해 지도 스크립트에 전달한다. 지도 스크립트는 브라우저에서 승인키를 사용하고 조회 결과는 공식 지도 안에 표시된다. [지도제공 검색 API 신청 안내](https://www.data.go.kr/data/15096716/openapi.do)
+주소 조회에는 좌표가 주소기반산업지원서비스로 전송된다. Flowad는 주소·좌표·승인키를 로그나 DB에 저장하지 않는다. 조회 실패 시 좌표 기반 추천은 계속한다. 결과 없음/국내 범위 밖은 204, 키 미설정·승인 거부·서비스 오류는 503이며 `X-Flowad-Status`로 구분한다. 외부 요청은 3초 내 종료하고 응답은 256KiB 이내만 사용한다.
+
+공식 SDK의 요청·응답 형식과 유효하지 않은 테스트키의 실제 `E0001` 응답은 2026-11-16에 확인했다. 승인키를 사용한 실제 주소 성공 응답은 아직 검증하지 않았다. 이 엔드포인트는 지도 SDK의 프로토콜이므로 SDK 변경 시 호환성 확인이 필요하다. **설정 → 여정 → 공식 주소 지도 확인**은 기존 지도 스크립트로 같은 승인키를 사용한다.
 
 타사 지도 길찾기 API를 사용하지 않는다. 서버의 `RoadProvider`는 현재 목 추정만 제공한다. Tesla Fleet API는 목적지와 경유지 전달 명령을 문서화하지만, 사용자 선택 전 여러 후보의 전체 왕복 경로를 순정 내비로 탐색해 앱에 반환하는 기능은 확인되지 않았다. 명령의 요청 형식과 지원 조건도 미확인이라 전송은 차단되어 있다.
 
@@ -73,7 +69,7 @@ $env:TESLA_CLIENT_SECRET = [System.Net.NetworkCredential]::new('', (Read-Host 'T
 $env:TESLA_REDIRECT_URI = Read-Host '등록한 HTTPS callback URL'
 ```
 
-콜백은 등록된 HTTPS URL의 `/api/tesla/callback`이어야 한다. HTTPS 인증서와 TLS 종료는 별도로 구성해야 하며, 애플리케이션에서 요청을 HTTPS로 인식해야 한다. 현재 로컬 HTTP 또는 인증서 미구성 상태로는 로그인하지 않는다. 개발자 앱 인증정보가 설정돼도 이 프로젝트의 TLS 및 외부 접근 구성은 자동으로 만들어지지 않는다. 역방향 프록시를 사용할 경우 신뢰 경계와 callback 접근 로그에서 코드·위치·토큰 제거, 세션/CSRF 보안 검토가 필요하다. 실제 인증을 사용자가 직접 진행하고, 차량 목록과 배터리 캐시를 버튼으로 수동 조회한다. 코스 찾기는 브라우저 GPS가 우선이다. Tesla 위치 사용에 동의하고 차량을 선택했다면 GPS 측정 실패 시 60초 이내의 차량 위치를 시도한다. 브라우저 권한 거부 시 차량 위치는 수동으로 조회할 수 있으며 오프라인 차량을 깨우지 않는다. Tesla에서 반환하는 `est_battery_range` 단위는 현재 마일 가정으로 km 변환하고 있어 실차 확인이 필요하다. 로그인 상태는 서버 메모리 세션(30분)으로만 유지된다. 연결 해제는 로컬 삭제이며 Tesla 계정 동의 철회는 별도다.
+콜백은 등록된 HTTPS URL의 `/api/tesla/callback`이어야 한다. HTTPS 인증서와 TLS 종료는 별도로 구성해야 하며, 애플리케이션에서 요청을 HTTPS로 인식해야 한다. 현재 로컬 HTTP 또는 인증서 미구성 상태로는 로그인하지 않는다. 개발자 앱 인증정보가 설정돼도 이 프로젝트의 TLS 및 외부 접근 구성은 자동으로 만들어지지 않는다. 역방향 프록시를 사용할 경우 신뢰 경계와 callback 접근 로그에서 코드·위치·토큰 제거, 세션/CSRF 보안 검토가 필요하다. 실제 인증을 사용자가 직접 진행하고, 차량 목록과 배터리 캐시를 버튼으로 수동 조회한다. 브라우저 GPS와 Tesla 차량 위치는 사용자가 각각 조회한다. 브라우저 권한을 거부해도 차량 위치를 수동으로 조회할 수 있으며 오프라인 차량을 깨우지 않는다. Tesla에서 반환하는 `est_battery_range` 단위는 현재 마일 가정으로 km 변환하고 있어 실차 확인이 필요하다. 로그인 상태는 서버 메모리 세션(30분)으로만 유지된다. 연결 해제는 로컬 삭제이며 Tesla 계정 동의 철회는 별도다.
 
 ## 4. Pleos 개발 환경 준비
 

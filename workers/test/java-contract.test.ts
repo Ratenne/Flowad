@@ -8,7 +8,7 @@ function normalize(value:unknown):unknown{
 }
 for(const fixture of fixtures.cases)it(`matches actual Java response: ${fixture.name}`,async()=>{
   const body='body'in fixture?fixture.body:undefined;
-  const r=await call(fixture.path,body,{url:'http://127.0.0.1:18081',env:config({ALLOWED_ORIGINS:'',TESLA_CLIENT_ID:'',TESLA_CLIENT_SECRET:'',TESLA_REDIRECT_URI:'',ADDRESS_DB:undefined})});
+  const r=await call(fixture.path,body,{url:'http://127.0.0.1:18081',env:config({ALLOWED_ORIGINS:'',TESLA_CLIENT_ID:'',TESLA_CLIENT_SECRET:'',TESLA_REDIRECT_URI:'',JUSO_MAP_API_KEY:''})});
   expect(r.status).toBe(fixture.status);
   const text=await r.text();let response:unknown=text;try{response=normalize(JSON.parse(text));}catch{/* empty body */}
   expect(response).toEqual(fixture.response);

@@ -3,6 +3,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tesla 실차 연결 확인 · 결론</title>
+<link rel="stylesheet" href="./tesla-login.css">
 <style>
     body {
         margin: 0;
@@ -99,11 +100,12 @@
     </section>
 </main>
 <script type="module">
+    import {startTeslaLogin} from './tesla-login.js';
     let csrf = '', plan = null, chosenName = ''; const $ = id => document.getElementById(id);
     const message = e => ({ NOT_CONFIGURED: 'Tesla 개발자 앱 설정이 필요합니다.', NO_VEHICLE_SELECTED: '차량을 먼저 선택하세요.', COMMAND_PERMISSION_REQUIRED: '내비 전송 권한으로 다시 로그인하세요.', OFFLINE_OR_ASLEEP: '차량이 오프라인 또는 절전 상태입니다. 차량에서 연결을 확인하세요.', PRECONDITION_FAILED: 'Tesla 사전 조건 오류(HTTP 412)입니다. 개발자 앱의 해당 지역 파트너 등록을 확인해야 합니다.', PAYMENT_REQUIRED: 'Tesla API 결제 조건 확인이 필요합니다. 결제 한도는 자동 변경하지 않습니다.', INCORRECT_REGION: 'Tesla 계정 지역이 현재 API 지역과 다릅니다.', REGION_MISMATCH_EU: 'Tesla가 유럽·중동·아프리카 지역 계정을 반환했습니다. 해당 지역 등록 확인이 필요합니다.', REGION_MISMATCH_CN: 'Tesla가 중국 지역 계정을 반환했습니다. 중국 전용 앱 설정 확인이 필요합니다.', REGION_RESPONSE_INVALID: 'Tesla 지역 응답에 API 주소가 없습니다.', REGION_BASE_UNRECOGNIZED: 'Tesla가 현재 지원 목록에 없는 지역 API 주소를 반환했습니다.', REGION_PERMISSION_DENIED: 'Tesla 계정 지역 조회 권한이 부족합니다.', PERMISSION_DENIED: 'Tesla가 권한을 거부했습니다. 개발자 앱 승인·결제 한도·차량 접근 권한을 확인하세요.', PLAN_EXPIRED: '경로 확인이 만료됐습니다. 다시 확인하세요.', PROVIDER_UNAVAILABLE: '도로 서버가 기동 중이거나 응답하지 않습니다. 잠시 후 다시 확인하세요.' })[e.message] || '요청 실패: ' + e.message;
-    async function api(path, body) { const r = await fetch('./api/tesla/' + path, { method: 'POST', headers: { 'X-CSRF-Token': csrf, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: 'no-store' }); if (!r.ok) { let code = 'REQUEST_FAILED'; try { code = (await r.json()).error || code } catch { } throw Error(code) } return r.status === 204 ? null : r.json() }
+    async function api(path, body, signal) { const r = await fetch('./api/tesla/' + path, { method: 'POST', headers: { 'X-CSRF-Token': csrf, ...(body ? { 'Content-Type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined, cache: 'no-store', signal }); if (!r.ok) { let code = 'REQUEST_FAILED'; try { code = (await r.json()).error || code } catch { } throw Error(code) } return r.status === 204 ? null : r.json() }
     async function refresh() { try { const r = await fetch('./api/tesla/status', { cache: 'no-store' }); if (!r.ok) throw Error('STATUS_UNAVAILABLE'); const d = await r.json(); csrf = d.csrf; const connected = d.connection === 'CONNECTED'; $('auth').hidden = connected; $('disconnect').hidden = !connected; $('cars').disabled = !connected; $('status').textContent = connected ? 'Tesla 인증 연결됨 · 차량을 조회해 선택하세요.' : d.secure ? 'Tesla 연결 전' : 'HTTPS 연결 상태를 확인하세요.'; } catch (e) { $('status').textContent = message(e) } }
-    $('auth').onclick = async () => { try { const d = await api('authorize?commands=true&returnTo=check'); location.assign(d.url) } catch (e) { $('status').textContent = message(e) } };
+    $('auth').onclick = () => startTeslaLogin($('auth'),signal=>api('authorize?commands=true&returnTo=check',undefined,signal),e=>{ $('status').textContent = e.message==='LOGIN_TIMEOUT' ? '로그인 페이지 연결이 지연되고 있어요. 다시 시도해 주세요.' : message(e) });
     $('disconnect').onclick = async () => { try { await api('disconnect'); plan = null; $('preview').disabled = true; $('send').disabled = true; await refresh() } catch (e) { $('status').textContent = message(e) } };
     $('cars').onclick = async () => { try { $('cars').disabled = true; plan = null; $('send').disabled = true; $('preview').disabled = true; const cars = await api('vehicles'); $('vehicle').replaceChildren(...cars.map(c => new Option(c.name + ' · ' + c.state, c.id))); $('vehicle').hidden = !cars.length; $('choose').hidden = !cars.length; $('status').textContent = cars.length ? '연결할 차량을 선택하세요.' : '접근할 수 있는 차량이 없습니다.' } catch (e) { $('status').textContent = message(e) } finally { $('cars').disabled = false } };
     $('vehicle').onchange = () => { plan = null; $('send').disabled = true; $('preview').disabled = true; $('selection').textContent = '선택한 차량을 확인하고 이 차량 선택을 눌러주세요.' };

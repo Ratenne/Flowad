@@ -34,7 +34,7 @@ class JusoMapController {
             return page(503, "<p>공식 주소 지도를 사용할 수 없어요.</p>");
         }
 
-        var point = TO_KOREA_UNIFIED_GRID.transform(new ProjCoordinate(longitude, latitude), new ProjCoordinate());
+        var point = project(latitude, longitude);
         String scriptUrl = UriComponentsBuilder.fromUriString(SCRIPT)
             .queryParam("confmKey", "{key}")
             .queryParam("searchType", 1)
@@ -60,6 +60,10 @@ class JusoMapController {
                 <title>공식 주소 지도</title></head>
                 <body style="height:100%%;margin:0">%s</body></html>
                 """.formatted(body));
+    }
+
+    static ProjCoordinate project(double latitude, double longitude) {
+        return TO_KOREA_UNIFIED_GRID.transform(new ProjCoordinate(longitude, latitude), new ProjCoordinate());
     }
 
     private static CoordinateTransform koreaUnifiedGrid() {

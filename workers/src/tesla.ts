@@ -16,6 +16,7 @@ const charge=z.object({charge_state:z.object({battery_level:z.number().int().nul
 const location=z.object({drive_state:coordinate.extend({timestamp:z.number().nullable().optional()})});
 type Context=import('hono').Context<Bindings>;
 const cookie='__Host-flowad';
+const oauthCookie='__Host-flowad-oauth';
 function secure(c: Context){return new URL(c.req.url).protocol==='https:';}
 function requireSecure(c: Context){if(!secure(c))throw new Failure('HTTPS_REQUIRED',403);}
 function setSession(c: Context,id:string){setCookie(c,cookie,id,{secure:true,httpOnly:true,sameSite:'Lax',path:'/',maxAge:1800});}
@@ -36,7 +37,8 @@ tesla.get('/status',async c=>{
 // Every authenticated operation is serialized and saved, including error transitions.
 tesla.use('*',async(c,next)=>{
   requireSecure(c);
-  const id=getCookie(c,cookie);if(!id)throw new Failure(c.req.path.endsWith('/callback')?'INVALID_STATE':'INVALID_CSRF',c.req.path.endsWith('/callback')?400:403);
+  const callback=c.req.path.endsWith('/callback');
+  const id=(callback?getCookie(c,oauthCookie):undefined)??getCookie(c,cookie);if(!id)throw new Failure(callback?'INVALID_STATE':'INVALID_CSRF',callback?400:403);
   const lease=await new Sessions(c.env).open(id);
   try{
     if(c.req.method!=='GET')requireCsrf(c,lease.data);
@@ -49,11 +51,19 @@ tesla.use('*',async(c,next)=>{
 function lease(c:Context){return c.get('lease' as never) as Lease;}
 tesla.post('/authorize',async c=>{
   const l=lease(c),s=l.data,uri=callbackUri(c.env),state=nonce();
+  // Host-only cookies cannot follow a login from a preview host to production.
+  if(new URL(c.req.url).origin!==new URL(uri).origin){
+    const target=new URL(c.req.query('returnTo')==='check'?'tesla-check.html':'./',c.env.FRONTEND_URL);
+    return c.json({url:target.href});
+  }
   // Don't discard unresolved commands by beginning another login flow.
   if(pending(s))throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');
   const bool=(name:string)=>{const v=c.req.query(name);if(v!==undefined&&v!=='true'&&v!=='false')throw new Failure('INVALID_REQUEST');return v==='true';};
   s.requestedLocation=bool('location');s.requestedCommands=bool('commands');s.commands=false;s.state=await hash(state);s.returnTo=c.req.query('returnTo')==='check'?'tesla-check.html':'';
   await l.state(state);await l.save();
+  // Keep the initiating browser binding even if a concurrent status response
+  // replaces the general session cookie while the user is on Tesla's site.
+  setCookie(c,oauthCookie,getCookie(c,cookie)!,{secure:true,httpOnly:true,sameSite:'Lax',path:'/',maxAge:300});
   const q=new URLSearchParams({prompt:'login',response_type:'code',client_id:c.env.TESLA_CLIENT_ID!,redirect_uri:uri,scope:'openid offline_access vehicle_device_data'+(s.requestedLocation?' vehicle_location':'')+(s.requestedCommands?' vehicle_cmds':''),state,prompt_missing_scopes:'true',require_requested_scopes:String(s.requestedCommands||s.requestedLocation)});
   return c.json({url:`https://auth.tesla.com/oauth2/v3/authorize?${q}`});
 });
@@ -62,6 +72,7 @@ tesla.get('/callback',async c=>{
   if(!state||state.length>128||s.state!==await hash(state))throw new Failure('INVALID_STATE');
   const uri=callbackUri(c.env);if(new URL(c.req.url).origin!==new URL(uri).origin)throw new Failure('INVALID_STATE');
   await l.consumeState(state);delete s.state;await l.save();
+  deleteCookie(c,oauthCookie,{path:'/',secure:true});
   const code=c.req.query('code');if(c.req.query('error')||!code||code.length>4096)throw new Failure('AUTHORIZATION_DENIED');
   const data=await new TeslaClient(c.env,l).token({grant_type:'authorization_code',client_id:c.env.TESLA_CLIENT_ID!,client_secret:c.env.TESLA_CLIENT_SECRET!,redirect_uri:uri,audience:AUDIENCE,code});
   const t=acceptTokens(s,data);s.commands=!!s.requestedCommands&&hasScope(t,'vehicle_cmds');s.locationGranted=!!s.requestedLocation&&hasScope(t,'vehicle_location');
@@ -72,7 +83,7 @@ tesla.get('/callback',async c=>{
   await l.remove();const id=await new Sessions(c.env).create(s);setSession(c,id);
   return c.redirect(new URL(target,c.env.FRONTEND_URL).href,303);
 });
-tesla.post('/disconnect',async c=>{await lease(c).remove();deleteCookie(c,cookie,{path:'/',secure:true});return c.body(null,204);});
+tesla.post('/disconnect',async c=>{await lease(c).remove();deleteCookie(c,cookie,{path:'/',secure:true});deleteCookie(c,oauthCookie,{path:'/',secure:true});return c.body(null,204);});
 tesla.post('/vehicles',async c=>{
   const l=lease(c),s=l.data;
   if(pending(s))throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');

@@ -1,5 +1,6 @@
 export const nearbyLocationPolicy = Object.freeze({
-  highMeters: 30, maxMeters: 100, maxAgeMs: 15000,
+  // Regional course discovery can use a coarse fix; it must not identify a building.
+  highMeters: 30, preciseMeters: 100, maxMeters: 1000, maxAgeMs: 15000,
   initialMs: 15000, samplingMs: 7000, cacheMs: 5000
 });
 
@@ -59,7 +60,8 @@ export function createLocationService({
         lastError = 'UNAVAILABLE';
       } else {
         const quality = accuracy <= policy.highMeters ? 'HIGH' :
-          accuracy <= policy.maxMeters ? 'MEDIUM' : 'LOW';
+          accuracy <= policy.preciseMeters ? 'MEDIUM' :
+          accuracy <= policy.maxMeters ? 'APPROXIMATE' : 'LOW';
         const fix = { lat, lng, accuracy, observedAt, speed, quality, source: 'BROWSER_GPS' };
         if (!fresh(fix)) sawStale = true;
         else if (quality === 'LOW') sawLow = true;

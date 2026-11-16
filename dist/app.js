@@ -2,6 +2,7 @@ import {createLocationService, validCoordinates} from './location-service.js';
 import {assessBattery} from './battery.js';
 import {routeFromOrigin,weatherAt,departureTimestamp} from './engine.js';
 import {routes} from './courses.js';
+import {startTeslaLogin} from './tesla-login.js';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const icon=(name,cls='')=>`<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 let saved=new Set();try{const v=JSON.parse(localStorage.getItem('gilgyeol-saved')||'[]');if(Array.isArray(v))saved=new Set(v.filter(id=>routes.some(r=>r.id===id)))}catch{}
@@ -11,12 +12,12 @@ const locationService=createLocationService({
  geolocation:navigator.geolocation, permissions:navigator.permissions, secure:window.isSecureContext
 });
 let locationRevision=0;
-let teslaFallbackAbort=null;
+let teslaLocationAbort=null;
 let addressAbort=null;
 function invalidateLocationWork(){
  locationRevision++;
  locationService.cancel();
- teslaFallbackAbort?.abort();
+ teslaLocationAbort?.abort();
  addressAbort?.abort();
  weatherRequest++;
  weatherAbort?.abort();
@@ -103,15 +104,15 @@ async function updateResults(){
  const token=++recommendationRequest; recommendationAbort?.abort(); state.tab='all';
  if(!state.location){recommendations=[];render();return}
  const controller=new AbortController(); recommendationAbort=controller; const timer=setTimeout(()=>controller.abort(),120000);
- recommendations=[];render();$('#noMatch').hidden=true;$('#resultStatus').textContent='추천 코스를 찾고 있어요…';
+ recommendations=[];render();$('#noMatch').hidden=true;$('#resultStatus').textContent='위치 확인 완료 · 추천 코스를 찾고 있어요…';
  const toWeather=w=>({condition:w.weather,temperatureC:w.temp,windMps:w.wind,severe:!!w.severe,source:state.weatherSource==='live'?'Open-Meteo forecast':state.weatherSource==='manual'?'user input':'example',observedAt:w.time?new Date(w.time).toISOString():null});
  const courseWeather=Object.fromEntries(effectiveRoutes().map(r=>[r.id,toWeather(weatherFor(r))]));
  const body={latitude:state.location.lat,longitude:state.location.lng,availableMinutes:+$('#duration').value,scenery:state.mood,vehicleType:state.vehicle,batteryPercent:state.vehicle==='ev'?+$('#battery').value:null,estimatedRangeKm:state.vehicle==='ev'?+$('#range').value:null,weather:toWeather({weather:state.weather,temp:state.temp,wind:state.wind,severe:state.originSevere}),courseWeather,originSevere:!!state.originSevere,walking:$('#walking').checked,departure:$('#departure').value};
  try{const response=await fetch('./api/recommendations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});if(!response.ok){let err={};try{err=await response.json()}catch{}throw new Error(err.error||'API error')}const data=await response.json();if(token!==recommendationRequest)return;
  recommendations=data.courses.map(item=>{const base=effectiveRoutes().find(r=>r.id===item.id);if(!base)throw new Error('Unknown course');return {...base,km:item.estimatedRoundTripKm,apiMinutes:item.estimatedMinutes,apiReasons:item.reasons,route:item.route,navigationTicket:item.navigationTicket,spots:item.route.points.map(p=>[p.name,p.type==='SCENIC_WAYPOINT'?'과거 도로 스냅 지점 · 현재 진입 미확인':p.type==='ORIGIN'?'출발 위치':'최종 복귀 위치'])}});
  const previous=state.selected;if(recommendations.length)state.selected=state.drivingPreview&&recommendations.some(r=>r.id===previous)?previous:recommendations[0].id;else if(state.drivingPreview)setDrivingPreview(false);
- render();$('#resultStatus').textContent=recommendations.length?`${state.location.label} 출발 · ${recommendations[0].route?.status==='ROAD_ROUTED'?'도로 경로 · 시간 예상':'거리·시간 추정'}`: data.guidance;syncSelection();
- }catch(e){if(token!==recommendationRequest)return;recommendations=[];if(state.drivingPreview)setDrivingPreview(false);render();$('#noMatch').hidden=true;$('#resultStatus').textContent='추천 서버에 연결하지 못했어요. 서버를 확인하고 다시 시도해 주세요.';}finally{clearTimeout(timer)}
+ render();$('#resultStatus').textContent=recommendations.length?`${state.location.label} 출발 · 추천 ${recommendations.length}개 · ${recommendations[0].route?.status==='ROAD_ROUTED'?'도로 경로 · 시간 예상':'거리·시간 추정'}`:'위치 확인 완료 · '+(data.guidance||'이 위치와 조건에 맞는 등록 코스가 없어요. 출발 지역이나 여정 시간을 바꿔 보세요.');syncSelection();
+ }catch(e){if(token!==recommendationRequest)return;recommendations=[];if(state.drivingPreview)setDrivingPreview(false);render();$('#noMatch').hidden=true;$('#resultStatus').textContent='위치는 확인했지만 코스 추천을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';}finally{clearTimeout(timer)}
 }
 function saveRoute(id){saved.has(id)?saved.delete(id):saved.add(id);let ok=true;try{localStorage.setItem('gilgyeol-saved',JSON.stringify([...saved]))}catch{ok=false}render();if(detailId===id&&$('#detailDialog').open){const b=$('#detailDialog [data-save]');const on=saved.has(id);b.classList.toggle('saved',on);b.setAttribute('aria-pressed',on);b.innerHTML=icon('bookmark')+(on?'저장됨':'저장하기')}toast(ok?(saved.has(id)?'저장한 길에 담았어요.':'저장한 길에서 지웠어요.'):'이번 세션에 저장했어요. 브라우저 보관은 사용할 수 없어요.')}
 function setTab(tab){if(tab==='saved')cancelLocationRequest();state.tab=tab;const list=tab==='saved'?effectiveRoutes().filter(r=>saved.has(r.id)):recommendations;if(list.length&&!list.some(r=>r.id===state.selected))state.selected=list[0].id;render();syncSelection();$('#resultStatus').textContent=tab==='saved'?'이 브라우저에 저장된 코스입니다.':state.location?'현재 위치에서 출발 · 거리·시간 추정':''}
@@ -128,7 +129,7 @@ $('#detailContent').innerHTML=`<header class="detail-top"><div><p class="overlin
 function showDetail(id){selectRoute(id);renderDetail(id);openDialog($('#detailDialog'))}
 function setDrivingPreview(on){if(on&&!canPreview()){toast('먼저 현재 위치에서 코스를 추천받아 주세요.');return}if(on){cancelLocationRequest();$$('dialog[open]').forEach(d=>d.close());sceneAPI?.pause();syncSelection()}state.drivingPreview=on;document.body.classList.toggle('drive-preview',on);$('#driveSummary').hidden=!on;$('#returnParked').hidden=!on;$('#driveModeBtn').setAttribute('aria-pressed',on);$('#modeLabel').textContent=on?'주행 UI 미리보기':'정차 화면';$('#modeIndicator').textContent=on?'D':'P';$('#sourcePill').textContent=on?'차량 연동 없음':state.weatherSource==='live'?'예보 반영':'코스 탐색';$('#routePanel').inert=on;$('#terrainCanvas').tabIndex=on?-1:0;$('.app-rail').inert=on;$('#driveModeBtn').setAttribute('aria-label',on?'정차 화면으로 돌아가기':'주행 화면 미리보기');if(on)$('#returnParked').focus();else $('#driveModeBtn').focus()}
 function initCarControls(){
-$('#allTab').addEventListener('click',()=>setTab('all'));$('#savedNav').addEventListener('click',()=>setTab('saved'));$('#backToResults').addEventListener('click',()=>setTab('all'));$('#routeCards').addEventListener('click',e=>{const b=e.target.closest('[data-preview]');if(b)selectRoute(b.dataset.preview)});$('#selectedDetail').addEventListener('click',()=>showDetail(state.selected));$('#heroLocate').addEventListener('click',()=>{if(!state.location)requestLocation();else if(state.location.kind==='gps'||state.location.kind==='tesla')requestLocation();else updateResults()});
+$('#allTab').addEventListener('click',()=>setTab('all'));$('#savedNav').addEventListener('click',()=>setTab('saved'));$('#backToResults').addEventListener('click',()=>setTab('all'));$('#routeCards').addEventListener('click',e=>{const b=e.target.closest('[data-preview]');if(b)selectRoute(b.dataset.preview)});$('#selectedDetail').addEventListener('click',()=>showDetail(state.selected));$('#heroLocate').addEventListener('click',()=>{if(state.location?.kind==='tesla')$('#teslaLocation').click();else if(!state.location||state.location.kind==='gps')requestLocation();else updateResults()});
 $$('[data-duration]').forEach(b=>b.addEventListener('click',()=>{$('#duration').value=b.dataset.duration;updateResults()}));$('#expandDuration').addEventListener('click',()=>{$('#duration').value='480';updateResults()});
 $('#settingsBtn').addEventListener('click',()=>showSettings('trip'));$('#quickSettings').addEventListener('click',()=>showSettings('trip'));$('#vehicleSettings').addEventListener('click',()=>showSettings('vehicle'));$('#applySettings').addEventListener('click',()=>$('#settingsDialog').close());$$('[data-setting-tab]').forEach(b=>{b.addEventListener('click',()=>setSettingsTab(b.dataset.settingTab));b.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=$$('[data-setting-tab]'),i=tabs.indexOf(b),j=e.key==='Home'?0:e.key==='End'?2:(i+(e.key==='ArrowRight'?1:2))%3;setSettingsTab(tabs[j].dataset.settingTab);tabs[j].focus()})});
 $('#moodChips').addEventListener('click',e=>{const b=e.target.closest('[data-mood]');if(!b)return;state.mood=b.dataset.mood;$$('[data-mood]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',x===b)});updateResults()});
@@ -151,19 +152,25 @@ function renderCities(){const query=$('#citySearch').value.trim();const list=dep
 function describeOrigin(location){
  if(location.kind==='gps'){
   const source=location.source==='BROWSER_CACHE'?'최근 GPS 위치':'브라우저 GPS';
-  return source+' · 정확도 약 '+Math.round(location.accuracy)+'m';
+  return source+' · '+(location.quality==='APPROXIMATE'?'대략적인 위치 · ':'')+'정확도 약 '+Math.round(location.accuracy)+'m';
  }
- if(location.kind==='tesla')return 'Tesla 차량 위치 · GPS 정확도 미제공';
+ if(location.kind==='tesla')return 'Tesla 차량 위치'+(location.vehicleName?' · '+location.vehicleName:'')+' · GPS 정확도 미제공';
  if(location.kind==='demo')return '체험 모드 · 서울 시청 부근 출발';
  return location.label+' 중심 출발';
 }
+function publishLocationStatus(message){
+ $('#locationStatus').textContent=message;
+ $('#mainLocationStatus').textContent=message;
+}
 function paintLocation(location){
  const label=location.addressLabel||location.label;
- const weather={live:'주변 예보 반영',error:'예시 날씨 적용'}[state.weatherSource];
+ const weather={live:'주변 예보 반영',loading:'예보 조회 중',error:'예보 조회 실패 · 예시 날씨 적용'}[state.weatherSource];
  $('#locationLabel').textContent=label;
  $('#locationLabel').title=label;
- $('#locationStatus').textContent=[location.addressLabel,describeOrigin(location),weather].filter(Boolean).join(' · ');
- $('#jusoMapButton').hidden=location.kind!=='gps'&&location.kind!=='tesla';
+ const measured=Number.isFinite(location.observedAt)?new Date(location.observedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' 측정':null;
+ const coordinates=['gps','tesla'].includes(location.kind)?'위도 '+location.lat.toFixed(5)+' · 경도 '+location.lng.toFixed(5):null;
+ publishLocationStatus([describeOrigin(location),measured,coordinates,location.addressStatus,location.addressLabel,weather].filter(Boolean).join(' · '));
+ $('#jusoMapButton').hidden=location.quality==='APPROXIMATE'||(location.kind!=='gps'&&location.kind!=='tesla');
 }
 $('#jusoMapButton').addEventListener('click',()=>{
  const location=state.location;
@@ -183,17 +190,23 @@ async function lookupLocationAddress(location){
  const controller=new AbortController();
  addressAbort=controller;
  const timeout=setTimeout(()=>controller.abort(),4000);
- let label='주소 미확인';
+ let label=null,status='주소를 확인하지 못했어요. 좌표로 코스를 추천합니다.';
  try{
   const response=await fetch('./api/location/address',{
    method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
    body:JSON.stringify({latitude:location.lat,longitude:location.lng})
   });
-  if(response.ok&&response.status!==204){
+  if(response.status===204)status='등록된 주소가 없어요. 좌표로 코스를 추천합니다.';
+  else if(response.status===503){
+   const reason=response.headers.get('X-Flowad-Status');
+   status=({JUSO_NOT_CONFIGURED:'도로명주소 서비스 승인키가 설정되지 않았어요.',JUSO_KEY_REJECTED:'도로명주소 서비스 승인키를 확인해 주세요.',JUSO_REQUEST_REJECTED:'도로명주소 서비스에서 조회 요청을 거부했어요.',JUSO_TIMEOUT:'도로명주소 조회 시간이 초과됐어요.'})[reason]||'도로명주소 서비스를 사용할 수 없어요.';
+   status+=' 좌표로 코스를 추천합니다.';
+  }else if(response.ok){
    const match=await response.json();
    if(typeof match.label==='string'&&match.label.trim()){
     if(match.type==='BUILDING'||match.type==='ROAD_ADDRESS')label=match.label;
     if(match.type==='NEARBY_ADDRESS')label='가까운 주소 · '+match.label;
+    if(label)status=match.source==='JUSO_MAP'?'도로명주소 서비스 조회 결과':'주소 확인됨';
    }
   }
  }catch{
@@ -204,6 +217,7 @@ async function lookupLocationAddress(location){
  }
  if(revision!==locationRevision||state.location!==location)return;
  location.addressLabel=label;
+ location.addressStatus=status;
  paintLocation(location);
 }
 function applyLocation(location){
@@ -216,8 +230,8 @@ function applyLocation(location){
  state.wind=2;
  state.weather='sunny';
  recommendations=[];
- const lookupAddress=location.kind==='gps'||location.kind==='tesla';
- if(lookupAddress)location.addressLabel='주소 확인 중…';
+ const lookupAddress=location.quality!=='APPROXIMATE'&&(location.kind==='gps'||location.kind==='tesla');
+ location.addressStatus=lookupAddress?'주소 확인 중…':location.quality==='APPROXIMATE'?'대략적인 위치여서 건물 주소를 조회하지 않아요.':null;
  state.weatherSource=location.kind==='demo'?'demo':'loading';
  paintLocation(location);
  if(location.kind==='demo'){
@@ -239,22 +253,23 @@ function cancelLocationRequest(){
  invalidateLocationWork();
  setLocating(false);
  $('#locationLabel').textContent='현재 위치 미확인';
- $('#locationStatus').textContent='위치 확인을 취소했어요.';
+ publishLocationStatus('위치 확인을 취소했어요.');
  $('#resultStatus').textContent='위치 확인을 취소했어요.';
 }
 async function requestLocation(){
- if(state.locating)return;
+ if(state.locating&&state.locationRequestKind==='browser')return;
  invalidateLocationWork();
  const revision=locationRevision;
  state.location=null;
+ state.locationRequestKind='browser';
  $('#jusoMapButton').hidden=true;
  state.tab='all';
  recommendations=[];
- $('#locationLabel').textContent='현재 위치 확인 중';
+ $('#locationLabel').textContent='브라우저 위치 확인 중';
  $('#locationLabel').title='';
  setLocating(true);
  render();
- $('#locationStatus').textContent='고정밀 GPS 위치를 확인하고 있어요…';
+ publishLocationStatus('브라우저 GPS 위치를 확인하고 있어요… Tesla 차량 위치는 별도로 조회합니다.');
  $('#resultStatus').textContent=$('#locationStatus').textContent;
  try{
   const fix=await locationService.request();
@@ -263,38 +278,19 @@ async function requestLocation(){
   if($('#locationDialog').open)$('#locationDialog').close();
  }catch(error){
   if(revision!==locationRevision)return;
-  let fallbackMessage='';
-  if(['TIMEOUT','UNAVAILABLE','LOW_ACCURACY','STALE'].includes(error.code)){
-   try{
-    const location=await tryTeslaFallback(revision);
-    if(revision!==locationRevision)return;
-    if(location){
-     applyLocation(location);
-     if($('#locationDialog').open)$('#locationDialog').close();
-     return;
-    }
-   }catch(failure){
-    if(revision!==locationRevision)return;
-    fallbackMessage=({
-     OFFLINE_OR_ASLEEP:'Tesla 차량이 오프라인 또는 절전 상태예요.',
-     PERMISSION_DENIED:'Tesla 차량 위치 권한을 확인해 주세요.',
-     TESLA_LOCATION_STALE:'Tesla 차량 위치도 오래됐어요.'
-    })[failure.message]||'Tesla 차량 위치도 확인하지 못했어요.';
-   }
-  }
   setLocating(false);
   const message=({
    DENIED:'위치 권한이 거부됐어요. 브라우저 권한을 확인하거나 출발 지역을 선택하세요.',
    TIMEOUT:'시간 안에 GPS 위치를 받지 못했어요. 다시 측정하거나 출발 지역을 선택하세요.',
    UNAVAILABLE:'위치 서비스를 사용할 수 없어요. 기기 위치 설정을 확인하거나 출발 지역을 선택하세요.',
-   LOW_ACCURACY:'정확도가 낮아 주변 코스를 검색하지 않았어요. 다시 측정하거나 출발 지역을 선택하세요.',
+   LOW_ACCURACY:'위치 오차가 1km를 넘어 주변 코스를 검색하지 않았어요. 기기 위치 설정을 확인해 다시 측정하거나 출발 지역을 선택하세요.',
    STALE:'오래된 위치만 확인됐어요. 다시 측정하거나 출발 지역을 선택하세요.',
    INSECURE:'위치 확인은 HTTPS를 지원하는 브라우저에서 사용할 수 있어요.',
    CANCELLED:'위치 확인을 취소했어요.'
   })[error.code]||'위치를 확인하지 못했어요.';
-  const guidance=[message,fallbackMessage].filter(Boolean).join(' ');
+  const guidance='브라우저 위치: '+message;
   $('#locationLabel').textContent='현재 위치 미확인';
-  $('#locationStatus').textContent=guidance;
+  publishLocationStatus(guidance);
   $('#resultStatus').textContent=guidance;
   $('#locationRecovery').textContent=guidance;
   if(error.code!=='CANCELLED'){
@@ -307,26 +303,7 @@ function teslaLocationFromReading(reading,maxAge){
  const age=Date.now()-reading.observedAt;
  if(reading.stale||!Number.isFinite(reading.observedAt)||age< -1000||age>maxAge)throw Error('TESLA_LOCATION_STALE');
  if(reading.status!=='LIVE'||!validCoordinates(reading.latitude,reading.longitude))throw Error('LOCATION_UNAVAILABLE');
- return {lat:reading.latitude,lng:reading.longitude,observedAt:reading.observedAt,label:'Tesla 차량 위치',kind:'tesla'};
-}
-async function tryTeslaFallback(revision){
- const controller=new AbortController();
- teslaFallbackAbort=controller;
- const timer=setTimeout(()=>controller.abort(),35000);
- try{
-  const status=await fetch('./api/tesla/status',{cache:'no-store',signal:controller.signal});
-  if(!status.ok)return null;
-  const {locationReady,csrf}=await status.json();
-  if(revision!==locationRevision||!locationReady||!csrf)return null;
-  const message='브라우저 위치를 확인하지 못해 Tesla 차량 위치를 확인하고 있어요…';
-  $('#locationStatus').textContent=message;
-  $('#resultStatus').textContent=message;
-  const reading=await teslaPost('location',undefined,{csrf,signal:controller.signal});
-  return teslaLocationFromReading(reading,60000);
- }finally{
-  clearTimeout(timer);
-  if(teslaFallbackAbort===controller)teslaFallbackAbort=null;
- }
+ return {lat:reading.latitude,lng:reading.longitude,observedAt:reading.observedAt,label:'Tesla 차량 위치',kind:'tesla',vehicleName:state.teslaVehicleName};
 }
 window.addEventListener('pagehide',cancelLocationRequest);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelLocationRequest()});
@@ -337,30 +314,55 @@ function initLocationControls(){['locateBtn','emptyLocate','retryLocation'].forE
 
 // Tesla: explicit user actions only; no polling or automatic wake.
 let teslaCsrf='';
-async function teslaStatus(){try{const r=await fetch('./api/tesla/status',{cache:'no-store'});if(!r.ok)throw 0;const d=await r.json();teslaCsrf=d.csrf;const connected=d.connection==='CONNECTED';$('#teslaStatus').textContent=!d.secure?'HTTPS 환경과 Tesla 앱 설정이 필요합니다.':connected?'Tesla 인증 연결됨 · 차량은 아직 조회하지 않았습니다.':'Tesla 연결 전';$('#teslaConnect').hidden=connected;$('#teslaList').hidden=!connected;$('#teslaDisconnect').hidden=!connected;}catch{$('#teslaStatus').textContent='Tesla 연결 상태를 확인할 수 없습니다.'}}
+async function teslaStatus(){try{const r=await fetch('./api/tesla/status',{cache:'no-store'});if(!r.ok)throw 0;const d=await r.json();teslaCsrf=d.csrf;const connected=d.connection==='CONNECTED';$('#teslaStatus').textContent=!d.secure?'HTTPS 환경과 Tesla 앱 설정이 필요합니다.':connected?d.locationReady?'Tesla 인증 연결됨 · 선택한 차량의 위치를 조회할 수 있습니다.':'Tesla 인증 연결됨 · 차량 선택과 위치 권한을 확인해 주세요.':'Tesla 연결 전';$('#teslaConnect').hidden=connected;$('#teslaList').hidden=!connected;$('#teslaDisconnect').hidden=!connected;$('#teslaLocation').hidden=!d.locationReady;}catch{$('#teslaStatus').textContent='Tesla 연결 상태를 확인할 수 없습니다.'}}
 async function teslaPost(path,body,{csrf=teslaCsrf,signal}={}){const r=await fetch('./api/tesla/'+path,{method:'POST',headers:{'X-CSRF-Token':csrf,...(body?{'Content-Type':'application/json'}:{})},body:body?JSON.stringify(body):undefined,cache:'no-store',signal});if(!r.ok){let code='REQUEST_FAILED';try{code=(await r.json()).error||code}catch{}throw Error(code)}return r.status===204?null:r.json()}
 function teslaError(e){const messages={REGION_ENDPOINT_UNAVAILABLE:'Tesla 계정 지역 조회에 실패했습니다 (응답 없음 또는 미지원). 차량 목록은 아직 조회하지 않았습니다.',REGION_PERMISSION_DENIED:'Tesla 계정 지역 조회 권한이 부족합니다.',REGION_SERVICE_UNAVAILABLE:'Tesla 계정 지역 조회 서비스에 응답이 없습니다.',REGION_REQUEST_FAILED:'Tesla 계정 지역 조회 요청이 실패했습니다.',VEHICLE_LIST_ENDPOINT_UNAVAILABLE:'계정 지역 확인 후 차량 목록 조회에 실패했습니다. 차량이 없다는 뜻은 아닙니다.',VEHICLE_LIST_PERMISSION_DENIED:'Tesla 차량 목록 조회 권한이 부족합니다.',VEHICLE_LIST_SERVICE_UNAVAILABLE:'Tesla 차량 목록 조회 서비스에 응답이 없습니다.',VEHICLE_LIST_REQUEST_FAILED:'Tesla 차량 목록 조회 요청이 실패했습니다.',INVALID_RESPONSE:'Tesla 차량 목록 응답 형식을 확인할 수 없습니다.',REGION_MISMATCH_OR_UNCONFIRMED:'계정 지역을 확인하지 못했거나 이 지역과 다릅니다.',HTTPS_REQUIRED:'Tesla 연결에는 HTTPS가 필요합니다.',NOT_CONFIGURED:'Tesla 앱 설정이 필요합니다.',PERMISSION_DENIED:'차량 정보 또는 위치 권한이 부족합니다.',REAUTH_REQUIRED:'인증이 만료되었거나 철회되었습니다. 다시 로그인해 주세요.',OFFLINE_OR_ASLEEP:'차량이 오프라인 또는 절전 상태입니다. 자동으로 깨우지 않습니다.',NO_DATA:'저장된 차량 상태가 없습니다.',LOCATION_UNAVAILABLE:'차량 위치 정보를 사용할 수 없습니다.',SERVICE_UNAVAILABLE:'Tesla 응답이 없거나 서비스가 일시적으로 불가합니다.'};$('#teslaData').textContent=messages[e.message]||'요청을 처리하지 못했습니다. 설정과 권한을 확인해 주세요.'}
-$('#teslaConnect').addEventListener('click',async()=>{try{const d=await teslaPost('authorize?location='+$('#teslaLocationConsent').checked+'&commands='+$('#teslaCommandConsent').checked);location.assign(d.url)}catch(e){teslaError(e)}});
-$('#teslaList').addEventListener('click',async()=>{try{const v=await teslaPost('vehicles');$('#teslaVehicles').innerHTML=v.length?v.map(car=>`<button class="button-secondary" data-tesla-car="${safeText(car.id)}">${safeText(car.name)} · ${safeText(car.state)}</button>`).join(''):'차량이 없습니다.';$('#teslaData').textContent='차량을 선택해 주세요.';$('#teslaReading').hidden=true;$('#teslaLocation').hidden=true}catch(e){teslaError(e)}});
-$('#teslaVehicles').addEventListener('click',async e=>{const b=e.target.closest('[data-tesla-car]');if(!b)return;try{await teslaPost('select',{id:b.dataset.teslaCar});teslaBatteryReading=null;$('#teslaData').textContent='차량 선택됨 · 실제 Tesla 데이터 조회 전';$('#teslaReading').hidden=false;$('#teslaLocation').hidden=false}catch(err){teslaError(err)}});
+$('#teslaConnect').addEventListener('click',()=>startTeslaLogin($('#teslaConnect'),signal=>teslaPost('authorize?location='+$('#teslaLocationConsent').checked+'&commands='+$('#teslaCommandConsent').checked,undefined,{signal}),e=>{if(e.message==='LOGIN_TIMEOUT')$('#teslaData').textContent='로그인 페이지 연결이 지연되고 있어요. 다시 시도해 주세요.';else teslaError(e)}));
+$('#teslaList').addEventListener('click',async()=>{try{const v=await teslaPost('vehicles');$('#teslaVehicles').innerHTML=v.length?v.map(car=>`<button class="button-secondary" data-tesla-car="${safeText(car.id)}" data-tesla-name="${safeText(car.name||'이름 없는 차량')}">${safeText(car.name||'이름 없는 차량')} · ${safeText(car.state)}</button>`).join(''):'차량이 없습니다.';$('#teslaData').textContent='차량을 선택해 주세요.';$('#teslaReading').hidden=true;$('#teslaLocation').hidden=true}catch(e){teslaError(e)}});
+$('#teslaVehicles').addEventListener('click',async e=>{const b=e.target.closest('[data-tesla-car]');if(!b)return;try{await teslaPost('select',{id:b.dataset.teslaCar});teslaBatteryReading=null;state.teslaVehicleName=b.dataset.teslaName;$('#teslaStatus').textContent='Tesla 인증 연결됨 · 선택 차량: '+state.teslaVehicleName;$('#teslaData').textContent='차량 선택됨 · 실제 Tesla 데이터 조회 전';$('#teslaReading').hidden=false;$('#teslaLocation').hidden=false}catch(err){teslaError(err)}});
 $('#teslaReading').addEventListener('click',async()=>{try{const d=await teslaPost('reading');teslaBatteryReading=d.status==='CACHED'?d:null;if(state.vehicle==='ev'&&state.location)updateResults();$('#teslaData').textContent=d.status==='NO_DATA'?'저장된 배터리 정보가 없습니다.':`Tesla 캐시 배터리 ${d.batteryPercent??'미제공'}% · 잔여 주행 가능 ${d.estimatedRangeKm??'미제공'}km · ${d.observedAt?new Date(d.observedAt).toLocaleString('ko-KR'):'시각 미제공'}${d.stale?' · 오래된 정보':''}`;}catch(e){teslaError(e)}});
 $('#teslaLocation').addEventListener('click',async()=>{
- cancelLocationRequest();
- const revision=++locationRevision;
+ if(state.locating&&state.locationRequestKind==='tesla')return;
+ invalidateLocationWork();
+ const revision=locationRevision;
+ state.location=null;
+ state.locationRequestKind='tesla';
+ state.tab='all';
+ recommendations=[];
+ setLocating(true);
+ render();
+ $('#jusoMapButton').hidden=true;
+ $('#locationLabel').textContent='Tesla 차량 위치 확인 중';
+ publishLocationStatus('Tesla에서 선택한 차량의 위치를 확인하고 있어요… 브라우저 GPS는 사용하지 않습니다.');
+ $('#resultStatus').textContent='차량 위치 확인 후 코스를 추천합니다.';
  const button=$('#teslaLocation');
  button.disabled=true;
+ const controller=new AbortController();
+ teslaLocationAbort=controller;
+ const timer=setTimeout(()=>controller.abort(),35000);
  try{
-  const d=await teslaPost('location');
+  const d=await teslaPost('location',undefined,{signal:controller.signal});
   if(revision!==locationRevision)return;
   const location=teslaLocationFromReading(d,15*60*1000);
   $('#teslaData').textContent='Tesla 차량 위치 확인 · '+new Date(d.observedAt).toLocaleString('ko-KR');
   applyLocation(location);
+  if($('#settingsDialog').open)$('#settingsDialog').close();
+  if($('#locationDialog').open)$('#locationDialog').close();
  }catch(e){
   if(revision!==locationRevision)return;
   if(e.message==='PERMISSION_DENIED')$('#teslaData').textContent='Tesla 차량 위치 접근 권한이 부족합니다.';
   else if(e.message==='TESLA_LOCATION_STALE')$('#teslaData').textContent='Tesla 차량 위치가 오래됐거나 시각을 확인할 수 없습니다.';
   else teslaError(e);
- }finally{button.disabled=false}
+  setLocating(false);
+  $('#locationLabel').textContent='Tesla 차량 위치 미확인';
+  const guidance=e.name==='AbortError'?'Tesla 차량 위치 조회 시간이 초과됐어요. 다시 시도해 주세요.':$('#teslaData').textContent;
+  publishLocationStatus(guidance);
+  $('#resultStatus').textContent='차량 위치를 확인하지 못해 추천하지 않았어요. 브라우저 위치나 출발 지역을 선택할 수 있습니다.';
+ }finally{
+  clearTimeout(timer);
+  if(teslaLocationAbort===controller)teslaLocationAbort=null;
+  button.disabled=false;
+ }
 });
 $('#teslaDisconnect').addEventListener('click',async()=>{try{await teslaPost('disconnect');cancelLocationRequest();locationRevision++;teslaBatteryReading=null;$('#teslaVehicles').textContent='';$('#teslaData').textContent='서버 세션의 연결 정보를 삭제했습니다. Tesla 권한 철회는 Tesla 계정에서 별도로 진행하세요.';$('#teslaReading').hidden=true;$('#teslaLocation').hidden=true;await teslaStatus()}catch(e){teslaError(e)}});
 teslaStatus();

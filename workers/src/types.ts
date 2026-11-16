@@ -3,7 +3,6 @@ export interface Env {
   SAFE_UPSTREAM_DIAGNOSTICS?: string;
   FREE_PLAN_MODE?: string;
   DB: D1Database;
-  ADDRESS_DB?: D1Database;
   TOKEN_ENCRYPTION_KEY: string;
   NAVIGATION_TICKET_SECRET: string;
   TESLA_CLIENT_ID?: string;

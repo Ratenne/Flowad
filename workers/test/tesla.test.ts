@@ -22,7 +22,8 @@ describe('Tesla OAuth and Fleet mock-only',()=>{
     const callback=()=>call('/api/tesla/callback?state='+a.state+'&code=mock-code',undefined,{headers:a.headers,env:a.env});
     const r=await callback();expect(r.status).toBe(303);expect(r.headers.get('Location')).toBe('https://flowad.test/tesla-check.html');expect(r.headers.get('Set-Cookie')).not.toContain(a.id);expect(fn).toHaveBeenCalledTimes(1);
     expect((await callback()).status).toBe(400);expect(fn).toHaveBeenCalledTimes(1);
-    const status=await call('/api/tesla/status',undefined,{headers:{Cookie:r.headers.get('Set-Cookie')!.split(';')[0]},env:a.env});expect(await status.json()).toMatchObject({connection:'CONNECTED',oauthStatus:'OAUTH_CONNECTED'});
+    const sessionCookie=r.headers.getSetCookie().find(value=>value.startsWith('__Host-flowad='))!;
+    const status=await call('/api/tesla/status',undefined,{headers:{Cookie:sessionCookie.split(';')[0]},env:a.env});expect(await status.json()).toMatchObject({connection:'CONNECTED',oauthStatus:'OAUTH_CONNECTED'});
   });
   it('rejects state in another browser, expires state, and cannot replay a denied authorization',async()=>{
     const a=await login(),other=await authenticated({tokens:undefined},a.env);
@@ -31,6 +32,31 @@ describe('Tesla OAuth and Fleet mock-only',()=>{
     expect((await call('/api/tesla/callback?state='+a.state+'&code=x',undefined,{headers:a.headers,env:a.env})).status).toBe(400);
     const b=await login();expect((await call('/api/tesla/callback?state='+b.state+'&error=access_denied',undefined,{headers:b.headers,env:b.env})).status).toBe(400);
     expect((await call('/api/tesla/callback?state='+b.state+'&code=x',undefined,{headers:b.headers,env:b.env})).status).toBe(400);
+  });
+  it('keeps OAuth bound to its initiating browser when the general cookie changes',async()=>{
+    const a=await authenticated({tokens:undefined},oauth());
+    const start=await a.post('authorize?commands=true&returnTo=check');
+    const state=new URL((await start.json() as {url:string}).url).searchParams.get('state')!;
+    const binding=start.headers.get('Set-Cookie')!;
+    expect(binding).toContain('__Host-flowad-oauth=');expect(binding).toContain('HttpOnly');expect(binding).toContain('Secure');expect(binding).toContain('SameSite=Lax');
+    const other=await authenticated({tokens:undefined},a.env);
+    const fn=external(()=>json(token));
+    const path='/api/tesla/callback?state='+state+'&code=mock-code';
+    expect((await call(path,undefined,{headers:other.headers,env:a.env})).status).toBe(400);
+    expect((await call('/api/tesla/callback?state=wrong&code=mock-code',undefined,{headers:{Cookie:binding.split(';')[0]},env:a.env})).status).toBe(400);
+    expect(fn).not.toHaveBeenCalled();
+    const r=await call(path,undefined,{headers:{Cookie:other.headers.Cookie+'; '+binding.split(';')[0]},env:a.env});
+    expect(r.status).toBe(303);expect(r.headers.get('Location')).toBe('https://flowad.test/tesla-check.html');
+    expect(r.headers.get('Set-Cookie')).toContain('__Host-flowad-oauth=;');expect(fn).toHaveBeenCalledTimes(1);
+    expect((await call(path,undefined,{headers:{Cookie:binding.split(';')[0]},env:a.env})).status).toBe(400);
+    expect(fn).toHaveBeenCalledTimes(1);
+  });
+  it('returns to the canonical site before starting OAuth from a preview host',async()=>{
+    const a=await authenticated({tokens:undefined},oauth());
+    const r=await call('/api/tesla/authorize?returnTo=check',{}, {headers:a.headers,env:a.env,url:'https://preview.test'});
+    expect(await r.json()).toEqual({url:'https://flowad.test/tesla-check.html'});
+    expect(r.headers.get('Set-Cookie')).toBeNull();
+    expect(await a.env.DB.prepare('SELECT hash FROM oauth_states').first()).toBeNull();
   });
   it('atomically allows only one state consumer and one session lease',async()=>{
     const a=await authenticated(),repo=new Sessions(a.env),l=await repo.open(a.id);await l.state('one-state');

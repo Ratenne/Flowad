@@ -1,0 +1,26 @@
+.tesla-login-loading {
+  box-sizing: border-box;
+  width: min(440px, calc(100vw - 40px));
+  padding: 38px 28px;
+  border: 1px solid #60745d;
+  border-radius: 24px;
+  background: #17241c;
+  color: #eef1e4;
+  text-align: center;
+  font-family: system-ui, sans-serif;
+  box-shadow: 0 24px 80px #0006;
+}
+.tesla-login-loading::backdrop { background: #101a15e8; }
+.tesla-login-loading h2 { margin: 24px 0 12px; font-size: 22px; line-height: 1.4; }
+.tesla-login-loading p { margin: 0; color: #c1ccb9; font-size: 16px; line-height: 1.7; }
+.tesla-login-spinner {
+  width: 40px;
+  height: 40px;
+  margin: auto;
+  border: 3px solid #60745d;
+  border-top-color: #dcf2b1;
+  border-radius: 50%;
+  animation: tesla-login-spin 1s linear infinite;
+}
+@keyframes tesla-login-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tesla-login-spinner { animation: none; } }

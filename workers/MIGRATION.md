@@ -37,7 +37,7 @@
 | `src/repository.ts` | D1 암호화 세션, 원자적 state 소비, 세션 lease, 요청 제한, 만료 정리 |
 | `src/tickets.ts` | Java 호환 HMAC-SHA256 5분 추천 스냅샷 |
 | `src/charging.ts` | 기존 가상 충전소, 실제 도로 필요 조건 유지 |
-| `src/location.ts` | 선택적 D1 공개 주소 인덱스, WKB 공간 판정, EPSG:5179 Juso HTML |
+| `src/location.ts`, `src/juso-address.ts` | JUSO_MAP_API_KEY로 공식 지도 서비스의 좌표 검색, EPSG:5179 변환, JSONP/XML 검증 및 지도 HTML |
 | `src/types.ts`, `src/utils.ts` | strict DTO, Web Crypto AES-GCM/HMAC, fetch timeout/응답 제한 |
 | `migrations/0001_auth.sql` | 세션·OAuth state·요청 제한 테이블/인덱스 |
 | `address/schema.sql`, `scripts/export-address-index.py` | 공개 주소 SQLite→D1 호환 SQL의 선택적 로컬 변환 |
@@ -73,7 +73,7 @@ OAuth state는 32바이트 암호학적 난수이며 세션과 결합된 해시�
 | POST `/api/recommendations` | Recommendation JSON | 200 courses/제외 수/guidance; 잘못된 입력 400 error | IMPLEMENTED / LOCAL_TEST_PASSED |
 | POST `/api/navigation/resolve` | `{ticket}` | 200 `{courseId,route:{points,status}}`; 오류 400 빈 body | IMPLEMENTED / LOCAL_TEST_PASSED |
 | POST `/api/charging/recommendations` | `{routeStatus,geometry:[{latitude,longitude}]}` | 200 ROAD_ROUTE_REQUIRED 또는 MOCK_ONLY/stations/note | IMPLEMENTED / LOCAL_TEST_PASSED / MOCK_TEST_PASSED |
-| POST `/api/location/address` | `{latitude,longitude}` | 200 `{label,type}`, 무일치 204, 좌표 오류 400 빈 body, 인덱스 미설정/오류 503 빈 body | IMPLEMENTED / LOCAL_TEST_PASSED (합성 공개 테스트 도형) |
+| POST `/api/location/address` | `{latitude,longitude}` | 200 `{label,type,source:"JUSO_MAP"}`, 무일치/국내 범위 밖 204, 좌표 오류 400, 키/조회 오류 503 빈 body (`X-Flowad-Status`: JUSO_NOT_CONFIGURED/JUSO_KEY_REJECTED/JUSO_REQUEST_REJECTED/JUSO_TIMEOUT/JUSO_UNAVAILABLE/JUSO_INVALID_RESPONSE) | IMPLEMENTED / MOCK_TEST_PASSED, 실제 성공 응답 NOT_VERIFIED |
 | POST `/api/location/juso-map` | form latitude,longitude | HTML 200, 국내 좌표 오류 400, 키 미설정 503; sandbox CSP | IMPLEMENTED / LOCAL_TEST_PASSED; 공식 스크립트 실행 NOT_VERIFIED |
 | GET `/api/tesla/status` | 없음 | 200 connection/locationReady/navigation/csrf/secure/message | IMPLEMENTED / LOCAL_TEST_PASSED |
 | POST `/api/tesla/authorize` | query location=false, commands=false, returnTo="" 또는 check | 200 `{url}`; HTTPS/CSRF 403; 미설정 503 | IMPLEMENTED / MOCK_TEST_PASSED |
@@ -98,7 +98,7 @@ Recommendation DTO는 기존 latitude/longitude, availableMinutes(1~1440), scene
 - 405/415 상태를 유지하지만 Spring 기본 에러의 timestamp/path/error envelope 전체는 복제하지 않고 `{error:...}`로 통일한다. 기존 Charging의 잘못된 geometry에 대한 처리되지 않은 500은 안전하게 400 INVALID_REQUEST로 바꿨다.
 - callback URI 검증, 갱신 후 명령 scope 재확인, 선택 차량의 own-property 확인, 미확인 명령 중 차량 목록/선택 변경 차단을 강화했다. 세션은 JVM 메모리에서 암호화 D1으로 바뀐다.
 - Java의 시작 시 무작위 티켓 secret 기본값은 isolate마다 달라질 수 있어 제거했다. Workers에서는 지속적인 NAVIGATION_TICKET_SECRET이 필요하다. 로컬 구성만 공개 테스트 키를 사용한다.
-- OSRM timeout은 Java 90초에서 8초로 줄였다. 오류 시 추정 경로로 대체하지 않는다. geometry 최대 20,000점/leg, 응답 4MB 제한으로 큰 응답은 거절한다. 주소 조회는 100개 후보·도형당 50,000점 제한을 넘으면 성공을 가장하지 않는다.
+- OSRM timeout은 Java 90초에서 8초로 줄였다. 오류 시 추정 경로로 대체하지 않는다. geometry 최대 20,000점/leg, 응답 4MB 제한으로 큰 응답은 거절한다. 주소 조회는 외부 요청 3초·응답 256KiB 제한을 적용하고 JSONP를 실행하지 않는다.
 - `/` 및 정적 파일 제공은 Java에서 유지된다. Workers는 API만 제공하므로 `/`는 404다. Pages 연결·기존 Render 프록시 변경은 다음 단계이며 이번 작업에서 수정하지 않았다.
 
 ## 4. 기능 상태·Pleos 분류
@@ -111,7 +111,7 @@ Recommendation DTO는 기존 latitude/longitude, availableMinutes(1~1440), scene
 | Tesla OAuth/갱신/차량/배터리/위치 | IMPLEMENTED | MOCK_TEST_PASSED | Workers 실제 OAuth/API는 NOT_VERIFIED |
 | Tesla 단일 목적지 계획/전송/사용자 확인 | IMPLEMENTED | MOCK_TEST_PASSED | 실제 명령·화면 NOT_VERIFIED. 다중 목적지 미지원 유지 |
 | Tesla 파트너 자동 등록 | 이전 제외 | NOT_VERIFIED | HTTP Controller가 아닌 Java ApplicationRunner의 명시적 운영 작업. Workers 요청·시작 시 등록을 자동 실행하지 않음. 기존 공개키/등록 도메인 그대로 보존 |
-| 주소 인덱스 | IMPLEMENTED | LOCAL_TEST_PASSED | 공개 테스트 도형의 D1 조회만 검증. 전국 SQLite 실데이터 변환·크기/성능은 NOT_VERIFIED |
+| 도로명주소 좌표 검색 | IMPLEMENTED | MOCK_TEST_PASSED | 2026-11-16 공식 SDK 프로토콜·실제 테스트키 승인 거부 응답 확인. 유효 승인키의 주소 성공 응답 NOT_VERIFIED. 자체 주소 DB 미사용 |
 | A. Pleos 서버 HTTP | IMPLEMENTED | LOCAL_TEST_PASSED | 공통 추천 + HMAC 추천 티켓 검증. 별도 Pleos REST provider는 원래 없음 |
 | B. Android 네이티브 SDK | 이전 대상 아님 | NOT_VERIFIED | `PleosNavi` NaviHelper, `PleosVehicleAdapter` Vehicle, CarUxRestrictions, WebView 브리지/여정 복원은 Android에 그대로 유지 |
 | C. Emulator/Virtual Console | 이전 대상 아님 | NOT_VERIFIED | Android 기기 테스트·주입된 도착 이벤트. Workers에서 에뮬레이션하지 않음 |
@@ -184,19 +184,19 @@ mvn spring-boot:run "-Dspring-boot.run.arguments=--server.port=18081 --server.ad
 | TESLA_COMMAND_PROXY_URL, ROAD_ROUTING_URL | 이름 유지, 선택적 HTTPS 제공자 URL |
 | NAVIGATION_TICKET_SECRET | 이름 유지, base64 HMAC 키, 운영 Secrets |
 | JUSO_MAP_API_KEY | 이름 유지, 운영 Secrets로 관리하되 최종 HTML에는 기존처럼 브라우저 승인키 포함 |
-| ADDRESS_INDEX_PATH | 파일 경로 사용 제거. 선택적 ADDRESS_DB D1 binding과 공개 데이터 import로 대체 |
+| ADDRESS_INDEX_PATH, ADDRESS_DB | 현재 주소 API에서 사용하지 않음. JUSO_MAP_API_KEY로 외부 조회 |
 | TESLA_REGISTER_PARTNER | Workers 자동 등록 설정 없음. 기존 Java 운영자 도구 보존 |
 | PORT, APP_CONTEXT_PATH, server.servlet.session 설정 | PORT는 로컬 Wrangler CLI, context path는 API_PREFIX, 세션은 D1 TTL+쿠키로 대체 |
 | SERVER_SSL_KEY_STORE/TYPE/PASSWORD | Workers 런타임에서는 사용하지 않음. 이번 단계에서는 TLS/인증서 변경 없음 |
 | TOKEN_ENCRYPTION_KEY | 신규 32바이트 base64 AES 키, 운영 Workers Secret |
 | ALLOWED_ORIGINS, FRONTEND_URL, API_PREFIX | 신규 일반 vars. 명시적인 origin 목록, 안전한 callback 복귀 URL, 기존 경로 보존 |
-| DB, 선택적 ADDRESS_DB | D1 binding. 로컬 데이터베이스와 운영 ID를 분리 |
+| DB | 로그인·세션용 D1 binding 유지. 주소용 D1 불필요 |
 
 1. Cloudflare 계정과 **새 D1 database_id**를 실제 생성 결과로 지정. `wrangler.jsonc`에는 임의 계정/DB ID나 route를 넣지 않았다. 원격 migration/Secret 등록/배포는 아직 실행할 수 있는 설정이 모두 채워진 상태가 아니다.
 2. 실제 서비스 경로 확정. 현재 코드/Android는 `https://ravirgo.com/flowad/`이므로 해당 계약을 우선 보존했다. Pages 같은 origin의 `/flowad/api/*` 연결 또는 별도 API 도메인을 결정한 후 CORS·쿠키·Juso iframe CSP·콜백을 함께 검토해야 한다. 프런트 API 경로나 기존 Render 프록시는 수정하지 않았다.
 3. 독립적인 32바이트 base64 TOKEN_ENCRYPTION_KEY, 최소 32바이트 NAVIGATION_TICKET_SECRET을 Workers Secrets에 설정. TESLA_CLIENT_ID/SECRET도 Secrets. 기존 Java 티켓과 단기간 호환하려면 기존 키의 안전한 이관 여부를 결정한다. 값은 채팅/소스/로그에 남기지 않는다.
 4. TESLA_REDIRECT_URI는 등록된 정확한 HTTPS URL. FRONTEND_URL, API_PREFIX, ALLOWED_ORIGINS는 일반 vars. ROAD_ROUTING_URL과 TESLA_COMMAND_PROXY_URL은 실제 승인된 HTTPS 주소를 설정할 때만 활성화. JUSO_MAP_API_KEY는 브라우저 스크립트에서 사용되는 제공자 승인키이며 사용자에게 노출되는 기존 특성을 이해하고 도메인 제한을 확인한다.
-5. 주소 기능이 필요하면 공개 지역 데이터만 선택적 ADDRESS_DB로 이관. 로컬 exporter/스키마는 준비했지만 전국 실데이터 크기·공간 조회 비용·D1 SQL 100KB 제한·ODbL 조건 검토가 남아 있다. 기본 미설정 503은 기존 동작과 같다.
+5. 주소 기능에는 실제 API Worker의 JUSO_MAP_API_KEY에 지도제공 검색 API 승인키를 등록한다. 좌표는 주소기반산업지원서비스로 전송된다. 공식 SDK의 `/addrlink/addrMapData.do` 프로토콜 변경 시 호환성을 확인한다. 이전 주소 exporter/스키마는 런타임에 연결되지 않는다. 신청·검증 범위는 PC_SETUP.md 참조.
 6. Tesla 공개키의 기존 루트 URL `https://ravirgo.com/.well-known/appspecific/com.tesla.3p.public-key.pem`과 기존 등록 도메인을 유지. 별도 도메인으로 옮기면 공개키·앱 설정·등록 요구를 재검토한다. 서버 시작 때 파트너 등록을 자동 실행하지 않는다.
 7. TLS/브라우저 쿠키/원격 D1 consistency/삭제·백업 보존/로그에서 OAuth query 제거/계정별 외부 API 한도 검토. idempotency는 브라우저 세션·계획 단위이며 다른 브라우저·세션 만료 후 차량 전역 중복은 방지하지 않는다.
 8. 운영 CPU·메모리·D1 사용량 측정, 특히 큰 geometry/주소 인덱스. 무료 CPU 적합성은 다음 단계 검증 조건이며 현재 미확정이다.

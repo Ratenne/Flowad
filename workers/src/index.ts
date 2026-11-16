@@ -17,6 +17,12 @@ export default {
   async fetch(request:Request,env:Env,ctx:ExecutionContext){
     const u=new URL(request.url),prefix=env.API_PREFIX??'';
     if(env.ASSETS&&!u.pathname.startsWith('/api/')&&!u.pathname.startsWith(prefix+'/api/')){
+      if(env.TESLA_REDIRECT_URI&&u.origin!==new URL(env.FRONTEND_URL).origin){
+        const target=new URL(env.FRONTEND_URL);
+        target.pathname=u.pathname===prefix?prefix+'/':prefix&&u.pathname.startsWith(prefix+'/')?u.pathname:prefix+u.pathname;
+        target.search=u.search;
+        return Response.redirect(target.href,307);
+      }
       if(prefix&&(u.pathname===prefix||u.pathname==='/'))return Response.redirect(new URL(prefix+'/',u).href,308);
       if(prefix&&u.pathname.startsWith(prefix+'/'))u.pathname=u.pathname.slice(prefix.length);
       const response=await env.ASSETS.fetch(new Request(u,request)),location=response.headers.get('Location');

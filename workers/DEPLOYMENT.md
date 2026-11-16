@@ -13,6 +13,8 @@
 
 Cloudflare가 루트 디렉터리의 package-lock.json으로 의존성을 설치한 뒤 검사·배포한다. 검사가 실패하면 배포하지 않는다. 배포 결과는 Worker의 빌드/배포 화면에서 확인한다. `npm run build`는 배포 없는 dry-run이며 실제 수동 배포는 `npm run deploy`다.
 
+GitHub의 **Cloudflare Workers and Pages** 앱에 `Ratenne/Flowad` 저장소 접근이 허용되어 있어야 push 이벤트가 전달된다. 기존 다른 사이트의 저장소 접근은 제거하지 않는다. 연결 후 main에 새 커밋을 push해 빌드와 배포가 실제로 완료되는지 확인한다.
+
 ## 설정의 기준
 
 운영 Wrangler 설정은 `workers/wrangler.jsonc` 하나로 관리한다. `wrangler.production.jsonc`는 제거했다. 로컬 테스트는 별도 `wrangler.local.jsonc`를 사용한다. `wrangler.stage2.jsonc`는 과거 성능 실험용이며 운영 배포에 사용하지 않는다.

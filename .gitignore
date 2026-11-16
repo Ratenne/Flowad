@@ -1,4 +1,7 @@
 # Python
+.venv-poi/
+data/generated/
+data/raw/
 __pycache__/
 *.py[cod]
 

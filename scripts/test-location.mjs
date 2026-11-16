@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import vm from 'node:vm';
 import {validCoordinates} from '../dist/location-service.js';
 import './test-location-service.mjs';
+import './test-location-environment.mjs';
 
 // Exercise the actual app's asynchronous boundaries with synthetic GPS and API responses.
 const app = fs.readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
@@ -22,6 +23,7 @@ const gps = {lat: 37.5, lng: 127, accuracy: 10, source: 'BROWSER_GPS'};
 const pending = [];
 const context = vm.createContext({
   state: {location: null, weatherSource: 'demo'}, locationRevision: 0,
+  locationEnvironment:{vehicle:false,provider:'browser'},
   teslaLocationAbort: null, teslaCsrf:'test',
   recommendationRequest: 0, recommendationAbort: null, recommendations: [],
   $: get, render() {}, syncSelection() {}, setDrivingPreview() {},

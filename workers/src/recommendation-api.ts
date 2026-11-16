@@ -4,13 +4,27 @@ import type {Bindings} from './types';
 import {recommendation,recommend} from './recommendations';
 import {resolve} from './tickets';
 import {selectedRequest,verifySelected} from './selected-route';
-import {Failure} from './utils';
+import {Failure,hash,nonce,now} from './utils';
+import {dynamicPolicy} from './dynamic-recommendations';
+const inFlight=new Map<string,Promise<unknown>>();
 export const recommendationMethods={'/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST'} as const;
 export function mountRecommendationApi(app:Hono<Bindings>){
  app.post('/api/recommendations',async c=>{
   const raw:unknown=await c.req.json().catch(()=>null),r=recommendation.safeParse(raw);
   if(!r.success)return c.json({error:'Invalid recommendation request'},400);
-  return c.json(await recommend(r.data,c.env));
+  const key=await hash(JSON.stringify(r.data));
+  if(inFlight.has(key))return c.json(await inFlight.get(key));
+  if(inFlight.size>=2)return c.json({error:'RECOMMENDATION_BUSY'},503);
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),dynamicPolicy.totalMs);
+  const cancel=()=>controller.abort();c.req.raw.signal.addEventListener('abort',cancel,{once:true});if(c.req.raw.signal.aborted)cancel();
+  const pending=(async()=>{
+   const lease=nonce();
+   const slot=await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=?,expires=? WHERE id=(SELECT id FROM poi_routing_slots WHERE expires<? ORDER BY id LIMIT 1) RETURNING id').bind(lease,now()+60,now()).first<{id:number}>();
+   if(!slot)throw new Failure('RECOMMENDATION_BUSY',503);
+   try{return await recommend(r.data,c.env,controller.signal);}
+   finally{await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=NULL,expires=0 WHERE id=? AND lease=?').bind(slot.id,lease).run();}
+  })();inFlight.set(key,pending);
+  try{return c.json(await pending);}finally{clearTimeout(timer);c.req.raw.signal.removeEventListener('abort',cancel);inFlight.delete(key);}
  });
  app.post('/api/navigation/resolve',async c=>{
   try{const r=z.object({ticket:z.string()}).parse(await c.req.json());return c.json(await resolve(r.ticket,c.env.NAVIGATION_TICKET_SECRET));}catch{return c.body(null,400);}

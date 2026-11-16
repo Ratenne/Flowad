@@ -3,6 +3,8 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'scripts'))
 from poi_pipeline import Store, ingest_osm, ingest_tour, export
 from types import SimpleNamespace
+from unittest.mock import patch
+from urllib.parse import urlparse,parse_qs
 
 class Pipeline(unittest.TestCase):
  def setUp(self):
@@ -35,5 +37,15 @@ class Pipeline(unittest.TestCase):
   try:self.assertEqual(ingest_tour(SimpleNamespace(),self.store)['status'],'BLOCKED_MISSING_CREDENTIAL')
   finally:
    if before is not None:os.environ['TOUR_API_KEY']=before
+ def test_tour_pages_details_and_projection_without_network(self):
+  boundary=self.path/'country.poly';boundary.write_text('country\n1\n124 32\n132 32\n132 39\n124 39\n124 32\nEND\nEND\n')
+  def fake(url,path):
+   query=parse_qs(urlparse(url).query);cid=query.get('contentId',[str(int(query.get('contentTypeId',['12'])[0])*100)])[0]
+   item={'contentid':cid,'title':'관광 명소 '+cid,'mapx':'127','mapy':'37.5','modifiedtime':'20261116000000','overview':'<p>공개 설명</p>'}
+   path=Path(path);path.parent.mkdir(parents=True,exist_ok=True);path.write_text(json.dumps({'response':{'header':{'resultCode':'0000'},'body':{'totalCount':1,'items':{'item':[item]}}}}));return path
+  with patch.dict(os.environ,{'TOUR_API_KEY':'PUBLIC_TEST_KEY'}),patch('poi_pipeline.fetch',fake),patch('poi_pipeline.time.sleep'):
+   result=ingest_tour(SimpleNamespace(cache=self.path/'tour',boundary=boundary),self.store)
+  self.assertEqual(result['total'],3)
+  self.assertEqual(self.store.db.execute('SELECT description FROM pois LIMIT 1').fetchone()[0],'공개 설명')
 
 if __name__=='__main__':unittest.main()

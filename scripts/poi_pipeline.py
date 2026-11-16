@@ -1,7 +1,7 @@
 """Offline nationwide public-data ingestion. Never contacts Flowad or Tesla.
 Python 3.11+, osmium. SQLite staging; resumable deterministic snapshots; D1 SQL export.
 """
-import argparse, datetime as dt, gzip, hashlib, json, math, os, re, sqlite3, time, unicodedata
+import argparse, datetime as dt, gzip, hashlib, io, json, math, os, re, sqlite3, time, unicodedata
 import urllib.request, urllib.parse, xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -13,7 +13,7 @@ def normalized(s): return re.sub(r'[^\w]', '', unicodedata.normalize('NFKC',s).c
 def km(a,b,c,d):
     r=math.pi/180; v=math.sin((c-a)*r/2)**2+math.cos(a*r)*math.cos(c*r)*math.sin((d-b)*r/2)**2
     return 12742*math.asin(math.sqrt(min(1,v)))
-def quoted(x): return 'NULL' if x is None else str(x) if isinstance(x,(int,float)) else "'"+str(x).replace("'","''")+"'"
+def quoted(x): return 'NULL' if x is None else str(x) if isinstance(x,(int,float)) else "'"+str(x).replace("'","''").replace('\n',"'||char(10)||'").replace('\r',"'||char(13)||'")+"'"
 def fetch(url,path):
     path=Path(path); path.parent.mkdir(parents=True,exist_ok=True)
     if path.exists(): return path
@@ -40,9 +40,19 @@ def poly(path):
         elif line.strip()=='END' and ring: rings.append(ring); ring=[]
     if not rings: raise ValueError('INVALID_COUNTRY_BOUNDARY')
     return rings
+_ring_cache={}
 def inside_ring(x,y,ring):
+    key=id(ring)
+    if key not in _ring_cache:
+        buckets={};xs=[p[0] for p in ring];ys=[p[1] for p in ring]
+        for (a,b),(c,d) in zip(ring,ring[1:]+ring[:1]):
+            if b==d:continue
+            for band in range(math.floor(min(b,d)*100),math.floor(max(b,d)*100)+1):buckets.setdefault(band,[]).append((a,b,c,d))
+        _ring_cache[key]=(ring,(min(xs),min(ys),max(xs),max(ys)),buckets)
+    _,box,buckets=_ring_cache[key]
+    if not(box[0]<=x<=box[2] and box[1]<=y<=box[3]):return False
     inside=False
-    for (a,b),(c,d) in zip(ring,ring[1:]+ring[:1]):
+    for a,b,c,d in buckets.get(math.floor(y*100),[]):
         if (b>y)!=(d>y) and x<(c-a)*(y-b)/(d-b)+a: inside=not inside
     return inside
 def inside_geometry(x,y,g):
@@ -87,7 +97,7 @@ class Store:
         self.processed+=1
         try: lon,lat=representative(g)
         except (ValueError,TypeError,KeyError): self.rejected+=1; return
-        if not name or not normalized(name) or not(32<=lat<=39.5 and 124<=lon<=132) or (self.boundary and not any(inside_ring(lon,lat,r) for r in self.boundary)):
+        if not name or not normalized(name) or not(32<=lat<=39.5 and 124<=lon<=132) or (self.boundary and sum(inside_ring(lon,lat,r) for r in self.boundary)%2==0):
             self.rejected+=1; return
         pid=self.provider.lower()+':'+sid; state=access(tags)
         geom=json.dumps(g,separators=(',',':'),ensure_ascii=False)
@@ -149,7 +159,8 @@ class Store:
 
 def ingest_osm(args,store):
     import osmium
-    source=Path(args.pbf); digest=hashlib.file_digest(source.open('rb'),'sha256').hexdigest()
+    source=Path(args.pbf)
+    with source.open('rb') as source_file:digest=hashlib.file_digest(source_file,'sha256').hexdigest()
     reader=osmium.io.Reader(str(source)); header=reader.header(); updated=header.get('osmosis_replication_timestamp') or dt.datetime.fromtimestamp(source.stat().st_mtime,dt.timezone.utc).isoformat();reader.close()
     store.begin('OSM',digest,updated); store.boundary=poly(args.boundary)
     store.db.execute('DELETE FROM relation_members');store.db.execute('DELETE FROM admin_regions');store.db.execute('DELETE FROM road_candidates');store.db.execute('DELETE FROM road_spatial')
@@ -208,10 +219,13 @@ def ingest_osm(args,store):
 
 def ingest_tour(args,store):
     key=os.environ.get('TOUR_API_KEY')
-    if not key:return {'status':'BLOCKED_MISSING_CREDENTIAL','credential':'TOUR_API_KEY'}
+    if not key:
+        store.db.execute('INSERT OR REPLACE INTO poi_sync_jobs(id,provider,started_at,finished_at,status,error) VALUES(?,?,?,?,?,?)',('tourapi-missing-credential','TOURAPI',stamp(),stamp(),'BLOCKED_MISSING_CREDENTIAL','TOUR_API_KEY'));store.db.commit()
+        return {'status':'BLOCKED_MISSING_CREDENTIAL','credential':'TOUR_API_KEY'}
     # Freeze raw pages before projection; retry/resume from disk, never log the credential URL.
     cache=Path(args.cache);cache.mkdir(parents=True,exist_ok=True); all_files=[]
     for content_type in [12,14,28]:
+        expected_total=None
         page=1
         while True:
             path=cache/f'{content_type}-{page}.json'
@@ -221,16 +235,36 @@ def ingest_tour(args,store):
             data=json.loads(path.read_text());response=data['response']
             if response['header']['resultCode'] not in {'0000','00'}:raise RuntimeError('TOURAPI_PROVIDER_REJECTED')
             body=response['body'];all_files.append(path)
+            if expected_total is not None and int(body['totalCount'])!=expected_total:raise RuntimeError('TOURAPI_CHANGED_DURING_CAPTURE')
+            expected_total=int(body['totalCount'])
             if page*100>=int(body['totalCount']):break
             page+=1
-    fingerprint=hashlib.sha256(b''.join(hashlib.sha256(p.read_bytes()).digest() for p in all_files)).hexdigest()
-    store.begin('TOURAPI',fingerprint,stamp());store.boundary=poly(args.boundary)
+    details=cache/'details';details.mkdir(exist_ok=True);detail_files={};modified=[]
+    for path in all_files:
+        items=json.loads(path.read_text())['response']['body'].get('items') or {};items=items.get('item',[]) if isinstance(items,dict) else []
+        for item in items:
+            cid=str(item.get('contentid') or '');version=str(item.get('modifiedtime') or '')
+            if not cid.isdigit():continue
+            detail=details/(hashlib.sha256((cid+':'+version).encode()).hexdigest()+'.json')
+            if not detail.exists():
+                query=urllib.parse.urlencode({'serviceKey':urllib.parse.unquote(key),'MobileOS':'ETC','MobileApp':'Flowad','_type':'json','contentId':cid,'defaultYN':'Y','addrinfoYN':'Y','mapinfoYN':'Y','overviewYN':'Y'})
+                fetch('https://apis.data.go.kr/B551011/KorService2/detailCommon2?'+query,detail);time.sleep(.3)
+            response=json.loads(detail.read_text())['response']
+            if response['header']['resultCode'] not in {'0000','00'}:raise RuntimeError('TOURAPI_DETAIL_REJECTED_OR_QUOTA')
+            detail_files[cid]=detail;modified.append(version)
+    fingerprint=hashlib.sha256(b''.join(hashlib.sha256(p.read_bytes()).digest() for p in all_files+sorted(detail_files.values()))).hexdigest()
+    store.begin('TOURAPI',fingerprint,max(modified,default=stamp()));store.boundary=poly(args.boundary)
     for path in all_files:
         body=json.loads(path.read_text())['response']['body'];items=body.get('items') or {};items=items.get('item',[]) if isinstance(items,dict) else []
         for item in items:
+            if str(item.get('contentid')) in detail_files:
+                extra=json.loads(detail_files[str(item['contentid'])].read_text())['response']['body'].get('items') or {}
+                extra=extra.get('item',[]) if isinstance(extra,dict) else []
+                if extra:item={**item,**extra[0]}
             try: g={'type':'Point','coordinates':[float(item['mapx']),float(item['mapy'])]}
             except (KeyError,ValueError,TypeError):store.rejected+=1;continue
-            store.put(str(item['contentid']),item.get('title'),g,'attraction',item,item.get('modifiedtime') or store.updated,item.get('addr1'),str(item.get('areacode') or 'UNCLASSIFIED'),item.get('overview'))
+            description=re.sub('<[^>]*>','',item.get('overview') or '')
+            store.put(str(item['contentid']),item.get('title'),g,'attraction',item,item.get('modifiedtime') or store.updated,item.get('addr1'),str(item.get('areacode') or 'UNCLASSIFIED'),description or None)
     return store.finish()
 
 def export(store,directory):
@@ -258,14 +292,74 @@ def export(store,directory):
     (directory/'manifest.json').write_text(json.dumps({'files':hashes,'stats':store.stats(),'datasets':active},ensure_ascii=False,indent=2),encoding='utf-8')
     return {'files':len(hashes),'datasets':active}
 
+def export_cells(store,directory):
+    states=list(store.db.execute('SELECT * FROM poi_provider_state')); datasets=[r['active_dataset']+'-cells-v1' for r in states]
+    token=hashlib.sha256('|'.join(datasets).encode()).hexdigest()[:16]
+    directory=Path(directory)/token;directory.mkdir(parents=True,exist_ok=True)
+    files={};index=0;buffer=[];size=0;cell_count=0
+    def flush():
+        nonlocal index,buffer,size
+        if not buffer:return
+        index+=1;name=f'{index:06}.sql';content='\n'.join(buffer)+'\n';(directory/name).write_text(content,encoding='utf-8',newline='\n');files[name]=hashlib.sha256(content.encode()).hexdigest();buffer=[];size=0
+    def write(sql):
+        nonlocal buffer,size
+        length=len(sql.encode())
+        if length>90000:raise RuntimeError('CELL_EXCEEDS_D1_SQL_LIMIT')
+        if size+length>80000:flush()
+        buffer.append(sql);size+=length
+    def records(dataset):
+        for row in store.db.execute('SELECT * FROM pois WHERE dataset_id=? ORDER BY CAST(latitude*10 AS INTEGER),CAST(longitude*10 AS INTEGER),id',(dataset,)):
+            value=dict(row);source=store.db.execute('SELECT * FROM poi_sources WHERE dataset_id=? AND poi_id=?',(dataset,row['id'])).fetchone()
+            ap=[dict(r) for r in store.db.execute("SELECT * FROM poi_access_points WHERE dataset_id=? AND poi_id=? ORDER BY CASE kind WHEN 'PARKING_CANDIDATE' THEN 0 WHEN 'ROAD_CANDIDATE' THEN 1 ELSE 2 END",(dataset,row['id']))]
+            tags=json.loads(source['attributes_json']);keys={'tourism','natural','leisure','waterway','surface','motorcar','motor_vehicle','access','vehicle','parking','amenity','wikidata','wikipedia','website','ele','fee','opening_hours','geometry_sha256','representative','modifiedtime','contentid','contenttypeid','cat1','cat2','cat3'}
+            subset={k:v for k,v in tags.items() if k in keys and len(str(v))<2000}
+            value.update({'attributes_json':json.dumps(subset,ensure_ascii=False,separators=(',',':')),'source_record_sha256':hashlib.sha256(source['attributes_json'].encode()).hexdigest(),'source_updated_at':source['source_updated_at'],'attribution':source['attribution'],'access_points':ap})
+            preferred=ap[0];value.update({'access_latitude':preferred['latitude'],'access_longitude':preferred['longitude'],'access_kind':preferred['kind']})
+            yield value
+    for state,dataset in zip(states,datasets):
+        original=state['active_dataset'];metadata=dict(store.db.execute('SELECT * FROM poi_datasets WHERE id=?',(original,)).fetchone());metadata['id']=dataset
+        write('INSERT OR IGNORE INTO poi_datasets ('+','.join(metadata)+') VALUES('+','.join(quoted(v) for v in metadata.values())+');')
+        count=store.db.execute('SELECT count(*) FROM pois WHERE dataset_id=?',(original,)).fetchone()[0]
+        write(f'INSERT OR IGNORE INTO poi_storage VALUES({quoted(dataset)},\'CELLS\',{count});')
+        job=store.db.execute('SELECT * FROM poi_sync_jobs WHERE id=?',(original,)).fetchone()
+        if job:
+            data=dict(job);data['id']=dataset
+            write('INSERT OR REPLACE INTO poi_sync_jobs ('+','.join(data)+') VALUES('+','.join(quoted(v) for v in data.values())+');')
+        group=[];key=None;page=0
+        def emit():
+            nonlocal group,page,cell_count
+            if not group:return
+            lat=[r['latitude'] for r in group];lon=[r['longitude'] for r in group];payload=json.dumps(group,ensure_ascii=False,separators=(',',':'))
+            write('INSERT OR IGNORE INTO poi_cells VALUES('+','.join(quoted(v) for v in [dataset,f'{key}-{page}',min(lat),max(lat),min(lon),max(lon),payload])+');');page+=1;cell_count+=1;group=[]
+        public=ROOT/'dist/data';public.mkdir(exist_ok=True)
+        with (public/f'pois-{state["provider"].lower()}.ndjson.gz').open('wb') as file,gzip.GzipFile(fileobj=file,filename='',mtime=0,mode='wb') as zipped,io.TextIOWrapper(zipped,encoding='utf-8',newline='\n') as archive:
+            for value in records(original):
+                value['dataset_id']=dataset;next_key=f'{math.floor(value["latitude"]*10)}:{math.floor(value["longitude"]*10)}'
+                if key!=next_key:emit();key=next_key;page=0
+                if len(group)>=20 or len(json.dumps(group+[value],ensure_ascii=False).encode())>30000:emit()
+                group.append(value);archive.write(json.dumps({**value,'cell_id':f'{key}-{page}'},ensure_ascii=False,separators=(',',':'))+'\n')
+            emit()
+    for blocked in store.db.execute("SELECT * FROM poi_sync_jobs WHERE status='BLOCKED_MISSING_CREDENTIAL'"):
+        data=dict(blocked);write('INSERT OR REPLACE INTO poi_sync_jobs ('+','.join(data)+') VALUES('+','.join(quoted(v) for v in data.values())+');')
+    flush()
+    activation='\n'.join('INSERT OR REPLACE INTO poi_provider_state VALUES('+quoted(s['provider'])+','+quoted(d)+');' for s,d in zip(states,datasets))
+    (directory/'activate.sql').write_text(activation,encoding='utf-8')
+    manifest={'format':'CELLS','files':files,'stats':store.stats(),'datasets':datasets,'cells':cell_count,'sourceDatasets':[s['active_dataset'] for s in states]}
+    (directory/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
+    public_files=[f'pois-{s["provider"].lower()}.ndjson.gz' for s in states]
+    source_metadata=[{**dict(store.db.execute('SELECT * FROM poi_datasets WHERE id=?',(s['active_dataset'],)).fetchone()),'id':d,'record_count':store.db.execute('SELECT count(*) FROM pois WHERE dataset_id=?',(s['active_dataset'],)).fetchone()[0]} for s,d in zip(states,datasets)]
+    (ROOT/'dist/data/poi-manifest.json').write_text(json.dumps({'datasets':datasets,'metadata':source_metadata,'total':store.stats()['total'],'attributions':ATTR,'license':'OSM-derived records: ODbL 1.0; TourAPI records separately attributed','files':public_files,'checksums':{name:hashlib.sha256((ROOT/'dist/data'/name).read_bytes()).hexdigest() for name in public_files}},ensure_ascii=False),encoding='utf-8')
+    return {'directory':str(directory),'datasets':datasets,'cells':cell_count,'files':len(files),'records':store.stats()['total']}
+
 def main():
-    p=argparse.ArgumentParser();p.add_argument('command',choices=['fetch-osm','osm','tour','stats','export','validate']);p.add_argument('--db',default='data/generated/pois.sqlite');p.add_argument('--pbf',default='data/raw/south-korea-latest.osm.pbf');p.add_argument('--boundary',default='data/raw/south-korea.poly');p.add_argument('--cache',default='data/raw/tour');p.add_argument('--output',default='data/generated/d1');args=p.parse_args()
+    p=argparse.ArgumentParser();p.add_argument('command',choices=['fetch-osm','osm','tour','stats','export','export-rows','validate']);p.add_argument('--db',default='data/generated/pois.sqlite');p.add_argument('--pbf',default='data/raw/south-korea-latest.osm.pbf');p.add_argument('--boundary',default='data/raw/south-korea.poly');p.add_argument('--cache',default='data/raw/tour');p.add_argument('--output',default='data/generated/d1-cells');args=p.parse_args()
     if args.command=='fetch-osm':
         fetch('https://download.geofabrik.de/asia/south-korea.poly',args.boundary);fetch('https://download.geofabrik.de/asia/south-korea-latest.osm.pbf',args.pbf);print(json.dumps({'status':'DOWNLOADED','bytes':Path(args.pbf).stat().st_size}));return
     store=Store(args.db);store.boundary=[]
     if args.command=='osm':result=ingest_osm(args,store)
     elif args.command=='tour':result=ingest_tour(args,store)
-    elif args.command=='export':result=export(store,args.output)
+    elif args.command=='export':result=export_cells(store,args.output)
+    elif args.command=='export-rows':result=export(store,args.output)
     elif args.command=='validate':
         result={'integrity':store.db.execute('PRAGMA integrity_check').fetchone()[0],'foreignKeys':[list(r) for r in store.db.execute('PRAGMA foreign_key_check')],**store.stats()}
     else:result=store.stats()

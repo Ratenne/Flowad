@@ -1,7 +1,9 @@
 export const nearbyLocationPolicy = Object.freeze({
-  // Regional course discovery can use a coarse fix; it must not identify a building.
-  highMeters: 30, preciseMeters: 100, maxMeters: 1000, maxAgeMs: 15000,
-  initialMs: 15000, samplingMs: 7000, cacheMs: 5000
+  highMeters: 20, goodMeters: 50, preciseMeters: 100, maxMeters: 500,
+  maxAgeMs: 15000, maxDurationMs: 20000, stableMs: 3000,
+  stagnantMs: 8000, sampleIntervalMs: 1000,
+  // Permit road travel, but require another sample after an implausible jump.
+  maxSpeedMps: 60, movementSlackMeters: 30
 });
 
 export function validCoordinates(lat, lng) {
@@ -9,136 +11,147 @@ export function validCoordinates(lat, lng) {
     Number.isFinite(lng) && Math.abs(lng) <= 180;
 }
 
+function distanceMeters(a, b) {
+  const rad = Math.PI / 180;
+  const h = Math.sin((b.lat - a.lat) * rad / 2) ** 2 +
+    Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin((b.lng - a.lng) * rad / 2) ** 2;
+  return 6371000 * 2 * Math.asin(Math.sqrt(Math.min(1, h)));
+}
+
 export function createLocationService({
-  geolocation, permissions, secure = true, now = Date.now,
-  policy = nearbyLocationPolicy
+  geolocation, secure = true, now = Date.now, policy = nearbyLocationPolicy,
+  timers = {setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: id => clearTimeout(id)}
 }) {
   let active = null;
-  let cached = null;
-  const age = fix => now() - fix.observedAt;
-  const fresh = fix => age(fix) >= -1000 && age(fix) <= policy.maxAgeMs;
-  const error = code => Object.assign(new Error(code), { code });
+  const fresh = fix => now() - fix.observedAt >= -1000 && now() - fix.observedAt <= policy.maxAgeMs;
+  const error = code => Object.assign(new Error(code), {code});
 
-  function request() {
+  function request({onProgress} = {}) {
     if (active) return active.promise;
     if (!secure) return Promise.reject(error('INSECURE'));
-    if (!geolocation) return Promise.reject(error('UNAVAILABLE'));
-
+    if (!geolocation || (!geolocation.watchPosition && !geolocation.getCurrentPosition)) {
+      return Promise.reject(error('UNSUPPORTED'));
+    }
     let resolve, reject;
     const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
-    let watchId, timer, started = false, sampling = false, sawStale = false, sawLow = false;
-    let best = null, coarse = null, lastError = 'TIMEOUT';
-    const operation = { promise, cancel: () => finish(null, 'CANCELLED') };
+    let watchId, deadline, settleTimer, retryTimer;
+    let best = null, reference = null, jump = null, bestSince = now(), samples = 0;
+    let sawStale = false, lastError = 'TIMEOUT';
+    const startedAt = now();
+    const operation = {promise, cancel: () => finish(null, 'CANCELLED')};
     active = operation;
     const running = () => active === operation;
+    const compatible = (a, b) => distanceMeters(a, b) <= a.accuracy + b.accuracy +
+      policy.movementSlackMeters + policy.maxSpeedMps * Math.abs(b.observedAt - a.observedAt) / 1000;
 
     function finish(fix, code) {
       if (!running()) return;
       active = null;
-      clearTimeout(timer);
+      for (const timer of [deadline, settleTimer, retryTimer]) timers.clearTimeout(timer);
       if (watchId !== undefined) geolocation.clearWatch(watchId);
-      if (fix) {
-        if (fix.source === 'BROWSER_GPS') cached = fix;
-        resolve(fix);
-      } else {
-        if (code === 'DENIED') cached = null;
-        const failure=error(code);
-        if(code==='LOW_ACCURACY'&&coarse&&fresh(coarse))failure.fix=coarse;
+      if (fix) resolve({...fix, accuracyAccepted: true, userConfirmed: false});
+      else {
+        const failure = error(code);
+        if (['LOW_ACCURACY', 'UNSTABLE'].includes(code) && best && fresh(best)) {
+          failure.fix = {...best, accuracyAccepted: false, userConfirmed: false};
+        }
         reject(failure);
       }
     }
 
-    function endSampling() {
-      if (best && fresh(best)) finish(best);
-      else finish(null, sawLow ? 'LOW_ACCURACY' : sawStale || best ? 'STALE' : lastError);
+    function endMeasurement() {
+      if (jump) return finish(null, 'UNSTABLE');
+      if (best && fresh(best)) {
+        if (best.accuracy <= policy.preciseMeters) {
+          if (samples >= 2 && now() - bestSince >= policy.stableMs) return finish(best);
+          return finish(null, 'UNSTABLE');
+        }
+        return finish(null, 'LOW_ACCURACY');
+      }
+      finish(null, best || sawStale ? 'STALE' : lastError);
+    }
+
+    function considerFinish() {
+      if (!running() || !best || jump || !fresh(best) || samples < 2) return;
+      const wait = best.accuracy <= policy.goodMeters ? policy.stableMs : policy.stagnantMs;
+      if (best.accuracy > policy.preciseMeters) return;
+      const remaining = bestSince + wait - now();
+      if (remaining <= 0) finish(best);
+      else {
+        timers.clearTimeout(settleTimer);
+        settleTimer = timers.setTimeout(considerFinish, remaining);
+      }
     }
 
     function sample(position) {
       if (!running()) return;
-      const { latitude: lat, longitude: lng, accuracy, speed } = position.coords;
+      const {latitude: lat, longitude: lng, accuracy, speed} = position.coords;
       const observedAt = position.timestamp;
       if (!validCoordinates(lat, lng) || !Number.isFinite(accuracy) || accuracy < 0 ||
           !Number.isFinite(observedAt) || observedAt <= 0) {
         lastError = 'UNAVAILABLE';
-      } else {
+      } else if (!fresh({observedAt})) sawStale = true;
+      else if (!reference || observedAt >= reference.observedAt) {
         const quality = accuracy <= policy.highMeters ? 'HIGH' :
           accuracy <= policy.preciseMeters ? 'MEDIUM' :
           accuracy <= policy.maxMeters ? 'APPROXIMATE' : 'LOW';
-        const fix = { lat, lng, accuracy, observedAt, speed, quality, source: 'BROWSER_GPS' };
-        if (!fresh(fix)) sawStale = true;
-        else if (quality === 'LOW') {
-          sawLow = true;
-          if(!coarse||!fresh(coarse)||accuracy<coarse.accuracy)coarse=fix;
+        const fix = {lat, lng, accuracy, speed, observedAt, quality, source: 'BROWSER_GPS'};
+        if (reference && !compatible(reference, fix)) {
+          if (jump && observedAt > jump.observedAt && compatible(jump, fix)) {
+            // Two samples confirm the new area; restart stabilization there.
+            best = null;
+            reference = null;
+            jump = null;
+            samples = 0;
+          } else jump = fix;
+        } else jump = null;
+        if (!jump) {
+          if (!reference || observedAt > reference.observedAt) samples++;
+          reference = fix;
+          if (!best || !fresh(best) || accuracy < best.accuracy ||
+              (accuracy === best.accuracy && observedAt > best.observedAt)) {
+            if (!best || !fresh(best) || accuracy < best.accuracy) bestSince = now();
+            best = fix;
+          }
         }
-        else {
-          // Prefer a tighter fix unless its age outweighs the accuracy gain.
-          const score = point => point.accuracy + Math.max(0, age(point)) / 500;
-          if (!best || !fresh(best) || score(fix) < score(best) ||
-              (score(fix) === score(best) && observedAt > best.observedAt)) best = fix;
-          if (best.quality === 'HIGH') return finish(best);
-        }
+        // Candidates must never start address/weather/recommendation requests.
+        onProgress?.({fix: best ? {...best} : null, unstable: !!jump, elapsedMs: now() - startedAt});
+        considerFinish();
       }
-      refine();
+      scheduleFallback();
     }
 
     function failed(cause) {
       if (!running()) return;
       if (cause.code === 1) return finish(null, 'DENIED');
       lastError = cause.code === 3 ? 'TIMEOUT' : 'UNAVAILABLE';
-      refine();
+      scheduleFallback();
     }
 
-    function refine() {
-      if (!running() || sampling) return;
-      sampling = true;
-      clearTimeout(timer);
-      timer = setTimeout(endSampling, policy.samplingMs);
-      const options = { enableHighAccuracy: true, timeout: policy.samplingMs, maximumAge: 0 };
-      try {
-        if (!geolocation.watchPosition) {
-          geolocation.getCurrentPosition(sample, failed, options);
-          return;
-        }
-        const id = geolocation.watchPosition(sample, failed, options);
+    function scheduleFallback() {
+      if (!running() || geolocation.watchPosition) return;
+      timers.clearTimeout(retryTimer);
+      retryTimer = timers.setTimeout(measureOnce, policy.sampleIntervalMs);
+    }
+
+    function measureOnce() {
+      if (!running()) return;
+      try { geolocation.getCurrentPosition(sample, failed, options()); }
+      catch (cause) { finish(null, cause.name === 'SecurityError' ? 'INSECURE' : 'UNAVAILABLE'); }
+    }
+    const options = () => ({enableHighAccuracy: true, maximumAge: 0,
+      timeout: Math.max(1, policy.maxDurationMs - (now() - startedAt))});
+    deadline = timers.setTimeout(endMeasurement, policy.maxDurationMs);
+    try {
+      if (geolocation.watchPosition) {
+        const id = geolocation.watchPosition(sample, failed, options());
         if (running()) watchId = id;
         else geolocation.clearWatch(id);
-      } catch {
-        lastError = 'UNAVAILABLE';
-        endSampling();
-      }
+      } else measureOnce();
+    } catch (cause) {
+      finish(null, cause.name === 'SecurityError' ? 'INSECURE' : 'UNAVAILABLE');
     }
-
-    function start() {
-      if (!running()) return;
-      timer = setTimeout(refine, policy.initialMs);
-      try {
-        geolocation.getCurrentPosition(sample, failed, {
-          enableHighAccuracy: true, timeout: policy.initialMs, maximumAge: 0
-        });
-      } catch (cause) {
-        if (cause.name === 'SecurityError') finish(null, 'INSECURE');
-        else { lastError = 'UNAVAILABLE'; refine(); }
-      }
-    }
-
-    // Permission lookup is advisory and must not delay or block a fresh fix.
-    if (cached && age(cached) > policy.cacheMs) cached = null;
-    if (permissions?.query) {
-      timer = setTimeout(beginMeasurement, 250);
-      Promise.resolve().then(() => permissions.query({ name: 'geolocation' })).then(result => {
-        if (!running() || sampling || started) return;
-        clearTimeout(timer);
-        if (result.state === 'denied') finish(null, 'DENIED');
-        else if (result.state === 'granted' && cached && fresh(cached) &&
-            age(cached) <= policy.cacheMs && cached.quality === 'HIGH' &&
-            Number.isFinite(cached.speed) && cached.speed >= 0 && cached.speed <= 0.5) {
-          finish({ ...cached, source: 'BROWSER_CACHE' });
-        } else beginMeasurement();
-      }).catch(() => { if (!started && running()) { clearTimeout(timer); beginMeasurement(); } });
-    } else beginMeasurement();
-    function beginMeasurement() { started = true; start(); }
     return promise;
   }
-
-  return { request, cancel: () => active?.cancel() };
+  return {request, cancel: () => active?.cancel()};
 }

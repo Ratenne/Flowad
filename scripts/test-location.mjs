@@ -1,78 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import {createLocationService, nearbyLocationPolicy, validCoordinates} from '../dist/location-service.js';
-
-const policy = {...nearbyLocationPolicy, initialMs: 25, samplingMs: 8};
-let now = 100_000;
-const fix = (accuracy, age = 0, speed = null) => ({
-  timestamp: now - age, coords: {latitude: 37.5, longitude: 127, accuracy, speed}
-});
-function fake(first, samples = [], permission = 'granted') {
-  const counts = {first: 0, watch: 0, cleared: 0};
-  const deliver = (value, good, bad) => {
-    if (value?.code) bad(value);
-    else if (value) good(value);
-  };
-  const service = createLocationService({
-    geolocation: {
-      getCurrentPosition(good, bad, options) {
-        counts.first++;
-        assert.deepEqual(options, {enableHighAccuracy: true, timeout: 25, maximumAge: 0});
-        deliver(first, good, bad);
-      },
-      watchPosition(good, bad) {
-        counts.watch++;
-        for (const value of samples) deliver(value, good, bad);
-        return 0;
-      },
-      clearWatch(id) { assert.equal(id, 0); counts.cleared++; }
-    },
-    permissions: {query: async () => ({state: permission})},
-    now: () => now, policy
-  });
-  return {service, counts};
-}
-
-const high = fake(fix(10));
-assert.equal((await high.service.request()).quality, 'HIGH');
-assert.deepEqual(high.counts, {first: 1, watch: 0, cleared: 0});
-assert.equal((await fake(fix(50)).service.request()).quality, 'MEDIUM');
-assert.equal((await fake(fix(100)).service.request()).quality, 'MEDIUM');
-assert.equal((await fake(fix(200)).service.request()).quality, 'APPROXIMATE');
-assert.equal((await fake(fix(1000)).service.request()).quality, 'APPROXIMATE');
-await assert.rejects(fake(fix(1001)).service.request(), e=>e.code==='LOW_ACCURACY'&&e.fix.accuracy===1001);
-await assert.rejects(fake(fix(200, 16000)).service.request(), {code: 'STALE'});
-assert.equal((await fake(fix(200), [fix(10)]).service.request()).quality, 'HIGH');
-const denied = fake(fix(10), [], 'denied');
-await assert.rejects(denied.service.request(), {code: 'DENIED'});
-assert.equal(denied.counts.first, 0);
-await assert.rejects(fake({code: 1}).service.request(), {code: 'DENIED'});
-await assert.rejects(fake(null).service.request(), {code: 'TIMEOUT'});
-await assert.rejects(fake(fix(10, 16000)).service.request(), {code: 'STALE'});
-await assert.rejects(fake({code: 2}, [{code: 2}]).service.request(), {code: 'UNAVAILABLE'});
-await assert.rejects(createLocationService({secure: false}).request(), {code: 'INSECURE'});
-
-const retry = fake({code: 2}, [fix(150), fix(10)]);
-assert.equal((await retry.service.request()).accuracy, 10);
-assert.deepEqual(retry.counts, {first: 1, watch: 1, cleared: 1});
-assert.equal((await fake(fix(45), [fix(80)]).service.request()).accuracy, 45);
-assert.equal((await fake(fix(45, 14000), [fix(65)]).service.request()).accuracy, 65);
-assert.equal((await fake(fix(50), [fix(10, 16000)]).service.request()).accuracy, 50);
-const stationary = fake(fix(10, 0, 0));
-await stationary.service.request();
-assert.equal((await stationary.service.request()).source, 'BROWSER_CACHE');
-now += 16000;
-await assert.rejects(stationary.service.request(), {code: 'STALE'});
-assert.equal(stationary.counts.first, 2);
-
-const cancelled = fake(fix(50));
-const first = cancelled.service.request();
-assert.equal(cancelled.service.request(), first);
-await new Promise(resolve => setImmediate(resolve));
-cancelled.service.cancel();
-await assert.rejects(first, {code: 'CANCELLED'});
-assert.deepEqual(cancelled.counts, {first: 1, watch: 1, cleared: 1});
+import {validCoordinates} from '../dist/location-service.js';
+import './test-location-service.mjs';
 
 // Exercise the actual app's asynchronous boundaries with synthetic GPS and API responses.
 const app = fs.readFileSync(new URL('../dist/app.js', import.meta.url), 'utf8');
@@ -81,11 +11,12 @@ const nodes = new Map();
 const get = selector => {
   if (!nodes.has(selector)) nodes.set(selector, {
     value: '180', checked: false, textContent: '', open: false,
-    addEventListener(type, handler) { this[type] = handler; }
+    addEventListener(type, handler) { this[type==='close'?'onclose':type] = handler; },
+    close() { if(this.open){this.open=false;this.onclose?.();} }
   });
   return nodes.get(selector);
 };
-let finishFix, failFix, finishTesla, failTesla, measurements = 0, teslaLookups = 0, statusLookups = 0;
+let finishFix, failFix, reportFix, finishTesla, failTesla, measurements = 0, teslaLookups = 0, statusLookups = 0;
 let pagehide;
 const gps = {lat: 37.5, lng: 127, accuracy: 10, source: 'BROWSER_GPS'};
 const pending = [];
@@ -94,6 +25,7 @@ const context = vm.createContext({
   teslaLocationAbort: null, teslaCsrf:'test',
   recommendationRequest: 0, recommendationAbort: null, recommendations: [],
   $: get, render() {}, syncSelection() {}, setDrivingPreview() {},
+  paintLocation(location) { get('#locationLabel').textContent=location.label; },
   publishLocationStatus(message) { get('#locationStatus').textContent=message; get('#mainLocationStatus').textContent=message; },
   setLocating(on) { context.state.locating = on; },
   invalidateLocationWork() {
@@ -102,7 +34,7 @@ const context = vm.createContext({
     context.recommendationRequest++;
     context.recommendationAbort?.abort();
   },
-  locationService: {request() { measurements++; return new Promise((resolve,reject) => { finishFix = resolve; failFix = reject; }); }},
+  locationService: {request({onProgress}) { measurements++; reportFix=onProgress; return new Promise((resolve,reject) => { finishFix = resolve; failFix = reject; }); }},
   departureCities: () => [], applyLocation(location) {
     context.state.locating = false;
     context.state.location = location;
@@ -164,18 +96,30 @@ await acceptedTesla;
 assert.equal(context.state.location.kind, 'tesla');
 assert.equal(context.state.location.accuracy, undefined);
 const leaving = vm.runInContext('requestLocation()', context);
+const retainedLocation=context.state.location;
+const retainedResults=context.recommendations;
+const retainedSelection=context.state.selected='test';
+const retainedTab=context.state.tab='saved';
+reportFix({fix:{...gps,accuracy:1500}});
+assert.equal(context.state.location,retainedLocation);
+assert.equal(context.recommendations,retainedResults);
+assert.equal(context.state.selected,retainedSelection);
+assert.equal(context.state.tab,retainedTab);
+assert.match(get('#mainLocationStatus').textContent,/±1500m/);
+assert.equal(pending.length,2,'Progress must not request recommendations');
+const previousStatus=context.state.browserPreviousResultStatus;
 pagehide();
 finishFix(gps);
 await leaving;
-assert.equal(context.state.location, null);
-assert.equal(get('#resultStatus').textContent, '위치 확인을 취소했어요.');
+assert.equal(context.state.location,retainedLocation);
+assert.equal(get('#resultStatus').textContent,previousStatus);
 
 // Browser failures never query Tesla, regardless of failure reason.
-for(const code of ['LOW_ACCURACY','TIMEOUT','DENIED','UNAVAILABLE','STALE']){
+for(const code of ['LOW_ACCURACY','TIMEOUT','DENIED','UNAVAILABLE','UNSUPPORTED','INSECURE','STALE']){
   const browser=vm.runInContext('requestLocation()',context);
   failFix({code});
   await browser;
-  assert.equal(context.state.location,null);
+  assert.equal(context.state.location,retainedLocation);
   assert.equal(context.state.locating,false);
   assert.match(get('#mainLocationStatus').textContent,/브라우저 위치/);
 }
@@ -195,12 +139,56 @@ assert.equal(context.state.locating,false);
 assert.match(get('#locationLabel').textContent,/미확인/);
 assert.equal(measurements,beforeVehicle);
 
-const approximate = vm.runInContext('requestLocation()', context);
-finishFix({...gps, accuracy:500, quality:'APPROXIMATE'});
+// Run the actual confirmation and manual-origin handlers, plus applyLocation.
+let addressEffects=0, weatherEffects=0, recommendationEffects=0;
+Object.assign(context,{
+  paintLocationEnvironment(){}, requestPreferredLocation(){}, paintWeather(){},
+  loadWeather(){weatherEffects++;}, updateResults(){recommendationEffects++;},
+  lookupLocationAddress(){addressEffects++;},
+  openDialog(node){node.open=true;},
+  departureCities:()=>[{name:'테스트 출발지',lat:35.1,lng:129.1}]
+});
+vm.runInContext(slice('function applyLocation(location)', 'function cancelLocationRequest()')+
+  slice('function initLocationControls()', '// Tesla:')+'initLocationControls();',context);
+const approximate=vm.runInContext('requestLocation()',context);
+reportFix({fix:{...gps,accuracy:500}});
+failFix({code:'LOW_ACCURACY',fix:{...gps,accuracy:500,observedAt:Date.now()}});
 await approximate;
-assert.equal(statusLookups, 0);
-assert.equal(context.state.location.quality, 'APPROXIMATE');
-console.log('PASS: location accuracy, age, retries, permission, cancellation, duplicate clicks, stale API responses and GPS/Tesla source separation.');
+assert.equal(context.state.location,null);
+assert.equal(addressEffects+weatherEffects+recommendationEffects,0);
+assert.equal(get('#useApproximateLocation').hidden,false);
+get('#useApproximateLocation').click();
+assert.equal(context.state.location.quality,'APPROXIMATE');
+assert.equal(context.state.location.userConfirmed,true);
+assert.equal(addressEffects,0);
+assert.equal(weatherEffects,1);
+assert.equal(recommendationEffects,1);
+
+const manual=vm.runInContext('requestLocation()',context);
+const lateManualFix=finishFix, lateProgress=reportFix;
+get('#manualLocation').click();
+get('#cityChoices').click({target:{closest:()=>({dataset:{city:'테스트 출발지'}})}});
+const manualOrigin=context.state.location;
+lateProgress({fix:{...gps,accuracy:1}});
+lateManualFix({...gps,accuracy:1});
+await manual;
+assert.equal(context.state.location,manualOrigin);
+assert.equal(manualOrigin.kind,'manual');
+assert.equal(manualOrigin.lat,35.1);
+assert.equal(recommendationEffects,2);
+assert.equal(addressEffects,0);
+
+const normal=vm.runInContext('requestLocation()',context);
+finishFix({...gps,observedAt:Date.now(),quality:'HIGH',accuracyAccepted:true,userConfirmed:false});
+await normal;
+assert.equal(context.state.location.kind,'gps');
+assert.equal(context.state.location.lat,gps.lat);
+assert.equal(addressEffects,1);
+assert.equal(weatherEffects,3);
+assert.equal(recommendationEffects,3);
+assert.equal(statusLookups,0);
+assert.equal(teslaLookups,4);
+console.log('PASS: mocked app progress, preserved results, manual edit/late callbacks, confirmation, recommendations and GPS/Tesla source separation.');
 
 const addressLookups = [];
 const addressContext = vm.createContext({

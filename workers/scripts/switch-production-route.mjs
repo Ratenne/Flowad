@@ -1,10 +1,12 @@
 // Run ONLY after the user has approved the concrete production cutover report.
 // This changes one existing route, never DNS, Pages, Render or the old proxy code.
 import { cf } from './cloudflare-client.mjs';
-const zone='ea76e54e6de2bbd66dbe3f9225ae3485',id='149c7878f8e8418b8764bf6783402df1',pattern='ravirgo.com/flowad*';
+const zone='ea76e54e6de2bbd66dbe3f9225ae3485',pattern='ravirgo.com/flowad*';
 const mode=process.argv[2];
 if(!['--approved-cutover','--rollback'].includes(mode))throw new Error('Choose --approved-cutover only after explicit user approval, or --rollback to restore Render routing.');
-const before=(await cf(`/zones/${zone}/workers/routes/${id}`)).result;
+const matches=(await cf(`/zones/${zone}/workers/routes`)).result.filter(route=>route.pattern===pattern);
+if(matches.length!==1)throw new Error('Expected exactly one Flowad production route.');
+const before=matches[0],id=before.id;
 if(before.pattern!==pattern||!['flowad-path-proxy','flowad-api-stage2','flowad-api'].includes(before.script))throw new Error('Unexpected live route; refusing to overwrite another configuration.');
 if(mode==='--approved-cutover'){
   const ready=(await cf('/accounts/8840227b6eb94fdbb655f3a662bf55d8/workers/scripts/flowad-api/settings')).result;

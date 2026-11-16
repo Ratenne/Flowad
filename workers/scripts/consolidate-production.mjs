@@ -3,11 +3,13 @@
 import {mkdir,writeFile} from 'node:fs/promises';
 import {cf,accountId} from './cloudflare-client.mjs';
 const prefix=`/accounts/${accountId}`,sourceId='0b7a18d798b84d70b94ff8a276b605b9',unusedId='9c1e523f75de47e3a75177ae610ec51e';
-const routePath='/zones/ea76e54e6de2bbd66dbe3f9225ae3485/workers/routes/149c7878f8e8418b8764bf6783402df1';
+const routesPath='/zones/ea76e54e6de2bbd66dbe3f9225ae3485/workers/routes';
 if(process.argv[2]!=='--apply')throw Error('Use --apply only for the requested production consolidation.');
 const source=(await cf(`${prefix}/workers/workers/${sourceId}`)).result;
 if(!['flowad-api-stage2','flowad-api'].includes(source.name))throw Error('Unexpected production Worker identity');
-const route=(await cf(routePath)).result;
+const matches=(await cf(routesPath)).result.filter(route=>route.pattern==='ravirgo.com/flowad*');
+if(matches.length!==1)throw Error('Expected exactly one production route');
+const route=matches[0],routePath=routesPath+'/'+route.id;
 if(route.pattern!=='ravirgo.com/flowad*'||!['flowad-api-stage2','flowad-api'].includes(route.script))throw Error('Unexpected production route');
 const before=(await cf(`${prefix}/workers/scripts/${source.name}/settings`)).result;
 const required=['TOKEN_ENCRYPTION_KEY','NAVIGATION_TICKET_SECRET','TESLA_CLIENT_ID','TESLA_CLIENT_SECRET','JUSO_MAP_API_KEY'];

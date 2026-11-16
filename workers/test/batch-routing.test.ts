@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {base,config,external,json} from './helpers';
 // Historical experiment contract; production recommend() now always estimates.
-import {recommendWithRouting as recommend,recommendation} from '../src/recommendations';
+import {recommendWithRouting as recommend,recommendation} from '../src/legacy-recommendations';
 import {resolve} from '../src/tickets';
 function provider(coordinates:number[][],index:number,status?:number){return {status:status??(index%3===1?400:200),data:index%3===1||status?{code:'NoSegment'}:{code:'Ok',waypoints:coordinates.map(location=>({location,distance:0})),routes:[{legs:coordinates.slice(1).map(()=>({distance:1000+index*15000,duration:200+index*1000}))}]}};}
 function clean(value:unknown):unknown{if(Array.isArray(value))return value.map(clean);if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).filter(([k])=>!['generatedAt','navigationTicket'].includes(k)).map(([k,v])=>[k,clean(v)]));return value;}

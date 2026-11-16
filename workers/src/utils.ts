@@ -66,7 +66,7 @@ export function httpsBase(raw: string): string {
 export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown }> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url, { ...init, signal: controller.signal, redirect: 'manual' });
+    const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
     if (Number(response.headers.get('content-length')) > 4_000_000) throw new Failure('RESPONSE_TOO_LARGE');
     const reader = response.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
     if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > 4_000_000) { await reader.cancel(); throw new Failure('RESPONSE_TOO_LARGE'); } chunks.push(value); }

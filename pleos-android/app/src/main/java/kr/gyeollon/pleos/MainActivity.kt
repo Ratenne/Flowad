@@ -16,6 +16,8 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import kotlin.math.abs
+import org.json.JSONObject
+import androidx.webkit.JavaScriptReplyProxy
 
 /** Origin-scoped recommendation intake with native user confirmation. */
 class MainActivity : Activity() {
@@ -24,6 +26,10 @@ class MainActivity : Activity() {
     private lateinit var vehicleButton: Button
     private var vehicleReading = VehicleReading("NO_DATA", null, null, null, true, null, null, "NO_DATA")
     private var vehicleRequest = 0
+    private var webLocationReply: JavaScriptReplyProxy? = null
+    private var webLocationRequestId: String? = null
+    private var webLocationPage: String? = null
+    private val webLocationTimeout = Runnable { finishWebLocation(error = "VEHICLE_LOCATION_TIMEOUT") }
     private lateinit var navi: PleosNavi
     private lateinit var restriction: ParkedRestriction
     private lateinit var status: TextView
@@ -94,12 +100,16 @@ class MainActivity : Activity() {
             root.addView(testButton)
         }
         web = WebView(this).apply {
+            settings.userAgentString = settings.userAgentString + " FlowadPleos/1.0"
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             settings.allowFileAccess = false
             settings.allowContentAccess = false
             WebView.setWebContentsDebuggingEnabled(false)
             webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String?, favicon: android.graphics.Bitmap?) {
+                    clearWebLocation()
+                }
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: android.webkit.WebResourceError) {
                     if (request.isForMainFrame) { webFailed = true; render() }
                 }
@@ -116,6 +126,22 @@ class MainActivity : Activity() {
             settings.allowUniversalAccessFromFileURLs = false
             settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_NEVER_ALLOW
             run {
+                TrustedBridge.install(this, "FlowadLocation") { payload, reply ->
+                    val request = runCatching { JSONObject(payload) }.getOrNull()
+                    val requestId = request?.optString("requestId") ?: ""
+                    val type = request?.optString("type")
+                    if (type == "LOCATION_CANCEL" && requestId == webLocationRequestId) {
+                        clearWebLocation()
+                    } else if (type == "LOCATION_REQUEST" && requestId.matches(Regex("[a-zA-Z0-9-]{1,80}"))) {
+                        if (!canAct() || webLocationReply != null) {
+                            reply.postMessage(JSONObject().put("type", "LOCATION_RESULT").put("requestId", requestId).put("error", "VEHICLE_LOCATION_UNAVAILABLE").toString())
+                        } else {
+                            webLocationReply = reply; webLocationRequestId = requestId; webLocationPage = url
+                            main.postDelayed(webLocationTimeout, 15000)
+                            runCatching { navi.queryLocation() }.onFailure { finishWebLocation(error = "VEHICLE_LOCATION_UNAVAILABLE") }
+                        }
+                    }
+                }
                 TrustedBridge.install(this) { payload, reply ->
                     if (!canAct() || verifyingRoute || confirmation?.isShowing == true || (journey != null && journey?.state != SegmentJourney.State.FINISHED)) {
                         reply.postMessage("요청을 처리할 수 없습니다.")
@@ -200,6 +226,24 @@ class MainActivity : Activity() {
             render()
         }
     }
+    private fun clearWebLocation() {
+        main.removeCallbacks(webLocationTimeout)
+        webLocationReply = null; webLocationRequestId = null; webLocationPage = null
+    }
+
+    private fun finishWebLocation(location: PleosNavi.Event.Location? = null, error: String? = null) {
+        val reply = webLocationReply ?: return
+        val payload = JSONObject().put("type", "LOCATION_RESULT").put("requestId", webLocationRequestId)
+        val trusted = !destroyed && !rendererGone && web.url == webLocationPage && BridgePolicy.trustedPage(web.url ?: "")
+        clearWebLocation()
+        if (!trusted) return
+        if (error != null || !canAct()) payload.put("error", error ?: "VEHICLE_LOCATION_UNAVAILABLE")
+        else if (location != null) payload.put("status", "LIVE").put("stale", false)
+            .put("latitude", location.latitude).put("longitude", location.longitude)
+            .put("observedAt", System.currentTimeMillis()).put("address", location.address ?: JSONObject.NULL)
+        runCatching { reply.postMessage(payload.toString()) }
+    }
+
     private fun onNaviEvent(event: PleosNavi.Event) {
         if (BuildConfig.DEBUG) Log.d("FlowadNavi", "event=${event.javaClass.simpleName}")
         when (event) {
@@ -220,6 +264,7 @@ class MainActivity : Activity() {
                         latitude = event.latitude, longitude = event.longitude, locationStatus = "LIVE",
                         navigationAddress = event.address?.trim()?.takeIf { it.isNotEmpty() }
                     )
+                    finishWebLocation(event)
                 }
             }
             is PleosNavi.Event.Destination -> {
@@ -337,6 +382,7 @@ class MainActivity : Activity() {
     }
     override fun onDestroy() {
         destroyed = true
+        clearWebLocation()
         confirmation?.dismiss()
         main.removeCallbacksAndMessages(null)
         generation++

@@ -22,7 +22,7 @@ if(source.name!=='flowad-api'){
     if(settings.bindings.length||Object.values(unused.references??{}).some(items=>items.length))throw Error('Old target is no longer unused');
     await cf(`${prefix}/workers/workers/${unusedId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'flowad-api-unused-20261116'})});
   }else if(unused.name!=='flowad-api-unused-20261116')throw Error('Unexpected unused Worker identity');
-  await cf(`${prefix}/workers/workers/${sourceId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'flowad-api'})});
+  await cf(`${prefix}/workers/workers/${sourceId}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'flowad-api',tags:source.tags??[],logpush:source.logpush??false,observability:source.observability})});
 }
 const currentRoute=(await cf(routePath)).result;
 if(currentRoute.script!=='flowad-api')await cf(routePath,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({pattern:route.pattern,script:'flowad-api',request_limit_fail_open:false})});

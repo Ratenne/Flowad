@@ -47,7 +47,7 @@ Tesla 공개 개발자 문서에서 차량 브라우저용 권장 CSS는 확인�
 
 Tesla 위치 조회는 인증 세션의 마지막 선택 차량을 복원한다. 차량 목록을 갱신해도 접근 가능한 동일 차량의 선택을 유지하며, 목록에서 사라진 차량이나 처음 보이는 다른 차량을 임의로 선택하지 않는다. 복원할 선택이 없으면 차량 목록을 열고, 사용자가 선택하면 차량 위치 조회를 계속한다. Workers의 마지막 차량 식별자는 기존 암호화 세션에, Java는 서버 세션 메모리에만 보관한다. 연결 해제·세션 만료 후에는 새로 선택해야 한다. 위치 사용 동의와 online 확인은 계속 필요하며, 차량 위치는 `stale`이 아니고 측정 시각이 15분 이내인 데이터만 사용한다.
 
-주소 조회와 공식 지도에는 **지도제공 검색 API 승인키**인 `JUSO_MAP_API_KEY`를 사용한다. 실제 웹/API가 실행되는 Cloudflare Worker `flowad-api-stage2`의 Secret으로 설정한다. Spring Boot를 직접 실행하는 경우에는 해당 서버의 같은 이름 환경 변수로 설정한다. Render의 도로 전용 서비스 `flowad-roads`에는 설정하지 않는다. 서비스 URL은 사용자가 접속하는 Flowad 주소로 등록한다. 일반 주소 검색/주소→좌표 API 승인키와 혼용하지 않는다. [공식 신청 안내](https://www.data.go.kr/data/15096716/openapi.do)
+주소 조회와 공식 지도에는 **지도제공 검색 API 승인키**인 `JUSO_MAP_API_KEY`를 사용한다. 실제 웹/API가 실행되는 Cloudflare Worker `flowad-api`의 Secret으로 설정한다. Spring Boot를 직접 실행하는 경우에는 해당 서버의 같은 이름 환경 변수로 설정한다. Render의 도로 전용 서비스 `flowad-roads`에는 설정하지 않는다. 서비스 URL은 사용자가 접속하는 Flowad 주소로 등록한다. 일반 주소 검색/주소→좌표 API 승인키와 혼용하지 않는다. [공식 신청 안내](https://www.data.go.kr/data/15096716/openapi.do)
 
 `POST /api/location/address`는 WGS84 위도·경도를 EPSG:5179로 변환하고 공식 지도 SDK가 사용하는 `https://business.juso.go.kr/addrlink/addrMapData.do`에 `searchType=1`로 요청한다. JSONP/XML을 실행하지 않고 파싱해 첫 도로명주소를 `{label,type:"ROAD_ADDRESS",source:"JUSO_MAP"}`으로 반환한다. 주소는 제공자의 좌표 검색 결과이며 건물 내부 위치를 증명하지 않는다. 별도 주소 DB·`ADDRESS_DB`·`ADDRESS_INDEX_PATH`는 사용하지 않는다. 이전 주소 인덱스 생성 스크립트는 현재 API와 연결되지 않는다.
 

@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {writeFile} from 'node:fs/promises';
 import catalog from '../../backend/src/main/resources/courses.json' with {type:'json'};
-const root=process.env.FLOWAD_TEST_ORIGIN??'https://flowad-api-stage2.o94777.workers.dev',prefix='/flowad',results=[];
+const root=process.env.FLOWAD_TEST_ORIGIN??'https://flowad-api.o94777.workers.dev',prefix='/flowad',results=[];
 const base={latitude:37.5665,longitude:126.978,availableMinutes:1440,scenery:'forest',vehicleType:'ev',batteryPercent:70,estimatedRangeKm:400};
 async function request(label,path,body){
  const t=performance.now(),r=await fetch(root+prefix+path,{method:body===undefined?'GET':'POST',headers:{'Content-Type':'application/json'},body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(20000)}),text=await r.text();let data;try{data=JSON.parse(text);}catch{}

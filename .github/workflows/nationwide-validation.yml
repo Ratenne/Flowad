@@ -30,7 +30,7 @@ jobs:
       - name: Build an isolated national road graph
         run: |
           mkdir -p data/raw
-          curl --fail --location --retry 2 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
+          curl --ipv4 --fail --location --retry 4 --retry-all-errors --connect-timeout 20 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
           image=ghcr.io/project-osrm/osrm-backend:v5.27.1
           docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-extract --threads 2 -p /opt/car.lua /data/korea.osm.pbf
           docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm

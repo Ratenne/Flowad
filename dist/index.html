@@ -144,9 +144,10 @@
               <use href="#i-location" />
             </svg><span id="emptyLocateLabel">이 기기 위치에서 추천</span><svg class="arrow">
               <use href="#i-arrow" />
-            </svg></button><button id="demoBtn" class="button-secondary">체험 코스 보기<svg aria-hidden="true" class="arrow">
+            </svg></button><button id="demoBtn" class="button-secondary">출발 지역으로 찾기<svg aria-hidden="true" class="arrow">
               <use href="#i-arrow" />
-            </svg></button><small>체험은 서울 출발 · 예시 날씨</small></div>
+            </svg></button><small id="catalogStatus">전국 공개 명소를 출발지에서 도로로 연결합니다.</small></div>
+        <button id="compareRoutes" type="button" class="button-secondary" hidden disabled>선택 코스 비교</button>
         <div id="routeCards" class="route-cards" hidden></div>
         <div id="emptyState" class="empty-state" hidden><svg>
             <use href="#i-bookmark" />
@@ -258,6 +259,7 @@
         <div id="moodChips" class="mood-options"><button data-mood="all" class="selected" aria-pressed="true">어디든
             좋아요</button><button data-mood="forest" aria-pressed="false">숲의 초록</button><button data-mood="coast"
             aria-pressed="false">바다의 여유</button><button data-mood="open" aria-pressed="false">탁 트인 풍경</button></div>
+        <label>코스 형태 <select id="tripMode"><option value="round">출발지로 돌아오는 왕복</option><option value="oneway">마지막 명소에서 마치는 편도</option></select></label>
         <label class="walk-setting"><input id="walking" type="checkbox" checked><span>잠깐 내려서 산책</span><span
             class="switch" aria-hidden="true"></span></label>
         <div class="location-setting"><span id="locationStatus" role="status">현재 위치를 확인해 주세요.</span><button
@@ -362,6 +364,8 @@
   <dialog id="detailDialog" class="detail-dialog">
     <div id="detailContent"></div>
   </dialog>
+  <p class="settings-note">데이터: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors · ODbL</a> · <a href="./data/poi-manifest.json" target="_blank" rel="noopener noreferrer">공개 POI 데이터·출처</a> · <a href="./data/pois-osm.ndjson.gz" download>OSM 가공 데이터 받기</a></p>
+  <dialog id="comparisonDialog" class="about-dialog"><header class="dialog-header"><h2>코스 비교</h2><button class="dialog-close" data-close="comparisonDialog" aria-label="비교 닫기">×</button></header><div id="comparisonContent" style="overflow:auto"></div><p>점수는 공개 메타데이터 기반 추정입니다. 실제 경치·통행·진입·주차를 보장하지 않습니다.</p></dialog>
   <dialog id="locationDialog" class="location-dialog">
     <header class="dialog-header">
       <div>

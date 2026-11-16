@@ -26,7 +26,7 @@ public class TeslaIntegration {
  public static final class Session {
   private String state; private Instant stateExpiry; private Tokens tokens;
   private boolean commands,requestedCommands,locationGranted,requestedLocation;
-  private final Map<String,String> vehicles=new HashMap<>(); private String selected;
+  private final Map<String,String> vehicles=new HashMap<>(); private String selected,lastVehicle;
   @Override public String toString(){return "[redacted]";}
  }
  public record Vehicle(String id,String name,String state) {}
@@ -56,7 +56,7 @@ public class TeslaIntegration {
  private Tokens readTokens(JsonNode data)throws Failure {String a=data.path("access_token").asText(""),r=data.path("refresh_token").asText("");long n=data.path("expires_in").asLong(0);if(a.isBlank()||r.isBlank()||n<=0)throw new Failure("TOKEN_RESPONSE_INVALID");return new Tokens(a,r,clock.instant().plusSeconds(n));}
  private static boolean hasScope(JsonNode data,String scope){return !data.has("scope")||Arrays.asList(data.path("scope").asText("").split("\\s+")).contains(scope);}
  private String access(Session s)throws Failure {if(s.tokens==null)throw new Failure("NOT_CONNECTED");if(!clock.instant().isBefore(s.tokens.expires.minusSeconds(30))){try{JsonNode data=gateway.token(Map.of("grant_type","refresh_token","client_id",clientId,"refresh_token",s.tokens.refresh));s.tokens=readTokens(data);s.locationGranted=s.locationGranted&&hasScope(data,"vehicle_location");}catch(Failure e){if("REAUTH_REQUIRED".equals(e.code)||"TOKEN_RESPONSE_INVALID".equals(e.code)){s.tokens=null;s.vehicles.clear();s.selected=null;throw new Failure("REAUTH_REQUIRED");}throw e;}}return s.tokens.access;}
- public void disconnect(Session s){synchronized(s){s.state=null;s.stateExpiry=null;s.tokens=null;s.vehicles.clear();s.selected=null;}}
+ public void disconnect(Session s){synchronized(s){s.state=null;s.stateExpiry=null;s.tokens=null;s.vehicles.clear();s.selected=null;s.lastVehicle=null;}}
  public boolean connected(Session s){synchronized(s){return s.tokens!=null;}}
  public boolean locationReady(Session s){synchronized(s){return s.tokens!=null&&s.locationGranted&&s.vehicles.containsKey(s.selected);}}
  private Failure stageFailure(String stage,Failure e){return switch(e.code){case "NO_DATA"->new Failure(stage+"_ENDPOINT_UNAVAILABLE");case "PERMISSION_DENIED"->new Failure(stage+"_PERMISSION_DENIED");case "SERVICE_UNAVAILABLE"->new Failure(stage+"_SERVICE_UNAVAILABLE");case "REQUEST_FAILED"->new Failure(stage+"_REQUEST_FAILED");default->e;};}
@@ -74,9 +74,10 @@ public class TeslaIntegration {
  public List<Vehicle> vehicles(Session s)throws Failure {synchronized(s){JsonNode resp;
   try{resp=gateway.get("/api/1/vehicles",access(s));}catch(Failure e){handleFailure(s,e);throw stageFailure("VEHICLE_LIST",e);}
   JsonNode list=resp.path("response");if(!list.isArray())throw new Failure("INVALID_RESPONSE");
-  s.vehicles.clear();s.selected=null;List<Vehicle> result=new ArrayList<>();for(JsonNode v:list){String vin=v.path("vin").asText("");if(vin.isBlank()){s.vehicles.clear();throw new Failure("INVALID_RESPONSE");}String id=nonce();s.vehicles.put(id,vin);result.add(new Vehicle(id,v.path("display_name").asText("Tesla"),v.path("state").asText("unknown")));}return List.copyOf(result);
+  var previous=new HashMap<>(s.vehicles);s.lastVehicle=previous.getOrDefault(s.selected,s.lastVehicle);
+  s.vehicles.clear();s.selected=null;List<Vehicle> result=new ArrayList<>();for(JsonNode v:list){String vin=v.path("vin").asText("");if(vin.isBlank()){s.vehicles.clear();throw new Failure("INVALID_RESPONSE");}String id=previous.entrySet().stream().filter(e->e.getValue().equals(vin)).map(Map.Entry::getKey).findFirst().orElseGet(this::nonce);s.vehicles.put(id,vin);if(vin.equals(s.lastVehicle))s.selected=id;result.add(new Vehicle(id,v.path("display_name").asText("Tesla"),v.path("state").asText("unknown")));}return List.copyOf(result);
  }}
- public void select(Session s,String id)throws Failure{synchronized(s){if(!s.vehicles.containsKey(id))throw new Failure("INVALID_VEHICLE");s.selected=id;}}
+ public void select(Session s,String id)throws Failure{synchronized(s){if(!s.vehicles.containsKey(id))throw new Failure("INVALID_VEHICLE");s.selected=id;s.lastVehicle=s.vehicles.get(id);}}
  public Reading reading(Session s)throws Failure{synchronized(s){if(s.selected==null||!s.vehicles.containsKey(s.selected))throw new Failure("NO_VEHICLE_SELECTED");JsonNode data;
   try{data=gateway.get("/api/1/vehicles/"+enc(s.vehicles.get(s.selected))+"/vehicle_data_cached",access(s));}catch(Failure e){handleFailure(s,e);throw e;}
   JsonNode c=data.path("response").path("charge_state");if(c.isMissingNode()||c.isNull())return new Reading("NO_DATA",null,null,null,true,null,null,"NOT_REQUESTED");
@@ -84,6 +85,12 @@ public class TeslaIntegration {
   return new Reading("CACHED",battery,range,at,at==null||clock.instant().toEpochMilli()-at>15*60*1000,null,null,"NOT_AVAILABLE_IN_CACHED_DATA");
  }}
  public Reading location(Session s)throws Failure {synchronized(s){
+  if(s.tokens==null)throw new Failure("NOT_CONNECTED");
+  if(!s.locationGranted)throw new Failure("PERMISSION_DENIED");
+  if(s.selected==null||!s.vehicles.containsKey(s.selected)){
+   s.selected=s.vehicles.entrySet().stream().filter(e->e.getValue().equals(s.lastVehicle)).map(Map.Entry::getKey).findFirst().orElse(null);
+   if(s.selected==null&&s.lastVehicle!=null)vehicles(s);
+  }
   if(s.selected==null||!s.vehicles.containsKey(s.selected))throw new Failure("NO_VEHICLE_SELECTED");
   if(!s.locationGranted)throw new Failure("PERMISSION_DENIED");
   String base="/api/1/vehicles/"+enc(s.vehicles.get(s.selected));

@@ -15,6 +15,9 @@ dialog,.settings-dialog{
   max-width:calc(100% - 24px);
 }
 .location-summary { font-size:13px; line-height:1.65; color:var(--ink); margin:8px 0; overflow-wrap:anywhere; }
+.origin-environment { display:flex; align-items:center; gap:8px; font-size:13px; margin:8px 0; }
+.origin-environment select { min-width:0; flex:1; min-height:44px; border:1px solid #596b48; border-radius:8px; background:#2b3b27; color:var(--ink); padding:6px; }
+.location-source-note { font-size:12px; line-height:1.5; color:#b8cca3; margin:6px 0; }
 .dialog-close,.settings-tabs button,.setting-row,.setting-row select,
 .mood-options button,.weather-types button,.location-setting button,.weather-source button,
 .location-body input,.city-choices button,.about-body>a,.detail-footer button,.detail-footer a {

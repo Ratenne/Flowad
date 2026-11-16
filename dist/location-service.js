@@ -27,7 +27,7 @@ export function createLocationService({
     let resolve, reject;
     const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
     let watchId, timer, started = false, sampling = false, sawStale = false, sawLow = false;
-    let best = null, lastError = 'TIMEOUT';
+    let best = null, coarse = null, lastError = 'TIMEOUT';
     const operation = { promise, cancel: () => finish(null, 'CANCELLED') };
     active = operation;
     const running = () => active === operation;
@@ -42,7 +42,9 @@ export function createLocationService({
         resolve(fix);
       } else {
         if (code === 'DENIED') cached = null;
-        reject(error(code));
+        const failure=error(code);
+        if(code==='LOW_ACCURACY'&&coarse&&fresh(coarse))failure.fix=coarse;
+        reject(failure);
       }
     }
 
@@ -64,7 +66,10 @@ export function createLocationService({
           accuracy <= policy.maxMeters ? 'APPROXIMATE' : 'LOW';
         const fix = { lat, lng, accuracy, observedAt, speed, quality, source: 'BROWSER_GPS' };
         if (!fresh(fix)) sawStale = true;
-        else if (quality === 'LOW') sawLow = true;
+        else if (quality === 'LOW') {
+          sawLow = true;
+          if(!coarse||!fresh(coarse)||accuracy<coarse.accuracy)coarse=fix;
+        }
         else {
           // Prefer a tighter fix unless its age outweighs the accuracy gain.
           const score = point => point.accuracy + Math.max(0, age(point)) / 500;

@@ -23,6 +23,10 @@ function setSession(c: Context,id:string){setCookie(c,cookie,id,{secure:true,htt
 function requireCsrf(c: Context,s: Session){requireSecure(c);if(!s.csrf||c.req.header('X-CSRF-Token')!==s.csrf)throw new Failure('INVALID_CSRF',403);}
 function pending(s: Session){return s.plan?.pending?s.plan:undefined;}
 function selected(s: Session){if(!s.tokens)throw new Failure('NOT_CONNECTED');if(!s.selected||!Object.hasOwn(s.vehicles,s.selected))throw new Failure('NO_VEHICLE_SELECTED');return s.selected;}
+function restoreVehicle(s:Session){
+  if(s.selected&&Object.hasOwn(s.vehicles,s.selected))return;
+  s.selected=Object.keys(s.vehicles).find(id=>s.vehicles[id]===s.lastVehicle);
+}
 function outcome(p: Plan){return {planId:p.id,status:p.status,order:p.attempted,destination:p.stops[p.attempted-1]?.name,vehicleStatus:p.vehicleStatus,requiresVehicleCheck:p.pending,automaticallyVerified:false,...(p.error?{error:p.error}:{}),commandStatus:p.status==='NOT_SENT'?'COMMAND_NOT_SENT':p.status==='API_ACCEPTED'?'COMMAND_SENT':'COMMAND_FAILED',navigationStatus:p.vehicleStatus==='VEHICLE_CONFIRMED'?'NAVIGATION_CONFIRMED':'NAVIGATION_NOT_CONFIRMED',confirmationSource:p.vehicleStatus==='VEHICLE_CONFIRMED'?'USER_REPORTED':'NONE'};}
 async function body<T extends z.ZodType>(c: Context,schema:T):Promise<z.infer<T>> {let raw:unknown;try{raw=await c.req.json();}catch{throw new Failure('INVALID_REQUEST');}const r=schema.safeParse(raw);if(!r.success)throw new Failure('INVALID_REQUEST');return r.data;}
 function callbackUri(e: Env){if(!configured(e))throw new Failure('NOT_CONFIGURED',503);let u:URL;try{u=new URL(e.TESLA_REDIRECT_URI!);}catch{throw new Failure('NOT_CONFIGURED',503);}if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!==`${e.API_PREFIX??''}/api/tesla/callback`)throw new Failure('NOT_CONFIGURED',503);return u.href;}
@@ -31,7 +35,7 @@ tesla.get('/status',async c=>{
   let id=getCookie(c,cookie),lease:Lease;
   try{if(!id)throw new Failure('NOT_CONNECTED');lease=await new Sessions(c.env).open(id);}
   catch(e){if(!(e instanceof Failure)||!['NOT_CONNECTED','REAUTH_REQUIRED'].includes(e.code))throw e;id=await new Sessions(c.env).create();lease=await new Sessions(c.env).open(id);}
-  const s=lease.data;await lease.save(true);if(secure(c))setSession(c,id!);
+  const s=lease.data;restoreVehicle(s);await lease.save(true);if(secure(c))setSession(c,id!);
   return c.json({connection:s.tokens?'CONNECTED':'NOT_CONNECTED',oauthStatus:s.tokens?'OAUTH_CONNECTED':'NOT_CONNECTED',locationReady:secure(c)&&!!(s.tokens&&s.locationGranted&&s.selected&&s.vehicles[s.selected]),navigation:configured(c.env)?'SINGLE_DESTINATION':'NOT_CONFIGURED',csrf:s.csrf,secure:secure(c),message:'전체 경유지 일괄 전송은 미지원입니다. 단일 목적지 교체만 지원합니다.'});
 });
 // Every authenticated operation is serialized and saved, including error transitions.
@@ -84,18 +88,25 @@ tesla.get('/callback',async c=>{
   return c.redirect(new URL(target,c.env.FRONTEND_URL).href,303);
 });
 tesla.post('/disconnect',async c=>{await lease(c).remove();deleteCookie(c,cookie,{path:'/',secure:true});deleteCookie(c,oauthCookie,{path:'/',secure:true});return c.body(null,204);});
-tesla.post('/vehicles',async c=>{
+async function loadVehicles(c:Context){
   const l=lease(c),s=l.data;
   if(pending(s))throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');
   let raw:unknown;try{raw=await new TeslaClient(c.env,l).get('/api/1/vehicles');}catch(e){if(e instanceof Failure&&['NO_DATA','PERMISSION_DENIED','SERVICE_UNAVAILABLE','REQUEST_FAILED'].includes(e.code))throw new Failure(`VEHICLE_LIST_${({NO_DATA:'ENDPOINT_UNAVAILABLE',PERMISSION_DENIED:'PERMISSION_DENIED',SERVICE_UNAVAILABLE:'SERVICE_UNAVAILABLE',REQUEST_FAILED:'REQUEST_FAILED'} as Record<string,string>)[e.code]}`);throw e;}
   const parsed=z.array(vehicle).safeParse(payload(raw));if(!parsed.success)throw new Failure('INVALID_RESPONSE');
+  const previous=s.vehicles;
+  s.lastVehicle=previous[s.selected??'']??s.lastVehicle;
   s.vehicles={};delete s.selected;
-  const list=parsed.data.map(v=>{const id=nonce();s.vehicles[id]=v.vin;return{id,name:v.display_name??'Tesla',state:v.state??'unknown'};});
+  const list=parsed.data.map(v=>{const id=Object.keys(previous).find(id=>previous[id]===v.vin)??nonce();s.vehicles[id]=v.vin;return{id,name:v.display_name||'Tesla',state:v.state??'unknown'};});
+  restoreVehicle(s);
+  return list;
+}
+tesla.post('/vehicles',async c=>{
+  const list=await loadVehicles(c);
   c.header('X-Flowad-Status',list.length?'VEHICLE_LIST_SUCCESS':'NO_ACCESSIBLE_VEHICLES');return c.json(list);
 });
 tesla.post('/select',async c=>{
   const s=lease(c).data,{id}=await body(c,z.object({id:z.string()}));if(pending(s))throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');
-  if(!Object.hasOwn(s.vehicles,id))throw new Failure('INVALID_VEHICLE');s.selected=id;delete s.plan;return c.body(null,204);
+  if(!Object.hasOwn(s.vehicles,id))throw new Failure('INVALID_VEHICLE');s.selected=id;s.lastVehicle=s.vehicles[id];delete s.plan;return c.body(null,204);
 });
 tesla.post('/reading',async c=>{
   const l=lease(c),s=l.data,vin=s.vehicles[selected(s)];
@@ -106,6 +117,11 @@ tesla.post('/reading',async c=>{
   return c.json({status:'CACHED',batteryPercent:d.battery_level??null,estimatedRangeKm:d.est_battery_range==null?null:round(d.est_battery_range*1.609344,1),observedAt:at,stale:at==null||Date.now()-at>900000,latitude:null,longitude:null,locationStatus:'NOT_AVAILABLE_IN_CACHED_DATA'});
 });
 tesla.post('/location',async c=>{
+  const session=lease(c).data;
+  if(!session.tokens)throw new Failure('NOT_CONNECTED');
+  if(!session.locationGranted)throw new Failure('PERMISSION_DENIED');
+  restoreVehicle(session);
+  if(!session.selected&&session.lastVehicle)await loadVehicles(c);
   const l=lease(c),s=l.data,vin=s.vehicles[selected(s)],client=new TeslaClient(c.env,l),base=`/api/1/vehicles/${encodeURIComponent(vin)}`;
   if(!s.locationGranted)throw new Failure('PERMISSION_DENIED');
   await client.access();if(!s.locationGranted)throw new Failure('PERMISSION_DENIED');

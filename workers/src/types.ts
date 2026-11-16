@@ -41,5 +41,5 @@ export interface Session {
   csrf: string; tokens?: { access: string; refresh: string; expires: number };
   state?: string; requestedLocation?: boolean; requestedCommands?: boolean;
   locationGranted?: boolean; commands?: boolean; returnTo?: string;
-  vehicles: Record<string, string>; selected?: string; plan?: Plan;
+  vehicles: Record<string, string>; selected?: string; lastVehicle?: string; plan?: Plan;
 }

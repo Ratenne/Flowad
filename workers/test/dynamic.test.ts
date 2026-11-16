@@ -15,12 +15,22 @@ async function seed(){
   await db.prepare('INSERT INTO poi_access_points VALUES(?,?,?,?,?,?,?,?)').bind('fixture',id,'ROAD_CANDIDATE',x,y,'POSSIBLE_ACCESS','FIXTURE',null).run();
  }
 }
-function mockRoads(){return external(url=>{
+function mockRoads(rejectFirst=false){return external(url=>{
  const u=new URL(url),coords=u.pathname.split('/').at(-1)!.split(';').map(v=>v.split(',').map(Number));
  const meters=(a:number[],b:number[])=>distance(a[1],a[0],b[1],b[0])*1300;
- if(u.pathname.includes('/table/'))return json({code:'Ok',sources:coords.map(location=>({location,distance:0})),durations:coords.map(a=>coords.map(b=>meters(a,b)/14)),distances:coords.map(a=>coords.map(b=>meters(a,b)))});
+ if(u.pathname.includes('/table/'))return json({code:'Ok',sources:coords.map((location,i)=>({location,distance:rejectFirst&&i===1?563:0})),durations:coords.map(a=>coords.map(b=>meters(a,b)/14)),distances:coords.map(a=>coords.map(b=>meters(a,b)))});
  return json({code:'Ok',waypoints:coords.map(location=>({location,distance:0})),routes:[{legs:coords.slice(1).map((b,i)=>({distance:meters(coords[i],b),duration:meters(coords[i],b)/14,steps:[{geometry:{coordinates:[coords[i],b]}}]}))}]});
 });}
+it('keeps valid road courses when one unverified POI cannot snap within 100m',async()=>{
+ await seed();const roads=mockRoads(true),e=config({ROAD_ROUTING_URL:'https://roads.test'});
+ const response=await call('/api/recommendations',{...base,vehicleType:'ice'},{env:e});
+ expect(response.status).toBe(200);
+ const data=await response.json() as {courses:Array<{waypoints:Array<{id:string}>;route:{status:string}}>};
+ expect(data.courses.length).toBeGreaterThan(0);
+ for(const c of data.courses){expect(c.route.status).toBe('ROAD_ROUTED');expect(c.waypoints.every(p=>p.id!=='fixture:서울:0')).toBe(true);}
+ expect(roads.mock.calls.filter(([url])=>String(url).includes('/table/'))).toHaveLength(1);
+ expect(roads.mock.calls.length).toBeLessThanOrEqual(6);
+});
 it.each(cities)('generates dynamic routes around %s with bounded D1/Table/Route work',async(_city,latitude,longitude)=>{
  await seed();const roads=mockRoads(),e=config({ROAD_ROUTING_URL:'https://roads.test'});
  const response=await call('/api/recommendations',{...base,latitude,longitude,vehicleType:'ice'},{env:e});

@@ -41,7 +41,7 @@ assert.equal((await fake(fix(50)).service.request()).quality, 'MEDIUM');
 assert.equal((await fake(fix(100)).service.request()).quality, 'MEDIUM');
 assert.equal((await fake(fix(200)).service.request()).quality, 'APPROXIMATE');
 assert.equal((await fake(fix(1000)).service.request()).quality, 'APPROXIMATE');
-await assert.rejects(fake(fix(1001)).service.request(), {code: 'LOW_ACCURACY'});
+await assert.rejects(fake(fix(1001)).service.request(), e=>e.code==='LOW_ACCURACY'&&e.fix.accuracy===1001);
 await assert.rejects(fake(fix(200, 16000)).service.request(), {code: 'STALE'});
 assert.equal((await fake(fix(200), [fix(10)]).service.request()).quality, 'HIGH');
 const denied = fake(fix(10), [], 'denied');
@@ -91,7 +91,7 @@ const gps = {lat: 37.5, lng: 127, accuracy: 10, source: 'BROWSER_GPS'};
 const pending = [];
 const context = vm.createContext({
   state: {location: null, weatherSource: 'demo'}, locationRevision: 0,
-  teslaLocationAbort: null,
+  teslaLocationAbort: null, teslaCsrf:'test',
   recommendationRequest: 0, recommendationAbort: null, recommendations: [],
   $: get, render() {}, syncSelection() {}, setDrivingPreview() {},
   publishLocationStatus(message) { get('#locationStatus').textContent=message; get('#mainLocationStatus').textContent=message; },

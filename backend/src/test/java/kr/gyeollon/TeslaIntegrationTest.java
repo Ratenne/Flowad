@@ -13,6 +13,15 @@ class TeslaIntegrationTest {
   public JsonNode get(String p,String t)throws TeslaIntegration.Failure{requestedPaths.add(p);if(noPermission)throw new TeslaIntegration.Failure("PERMISSION_DENIED");if(failPath!=null && p.endsWith(failPath))throw new TeslaIntegration.Failure("NO_DATA");try{return mapper.readTree(p.endsWith("/users/region")?"{\"response\":{\"fleet_api_base_url\":\"https://fleet-api.prd.na.vn.cloud.tesla.com\"}}":p.contains("?endpoints=location_data")?(location?"{\"response\":{\"drive_state\":{\"latitude\":37.5,\"longitude\":127.0,\"timestamp\":1767225600000}}}":"{\"response\":{}}"):p.endsWith("TEST_VIN")?(online?"{\"response\":{\"state\":\"online\"}}":"{\"response\":{\"state\":\"asleep\"}}"):p.endsWith("vehicles")?(empty?"{\"response\":[]}":"{\"response\":[{\"vin\":\"TEST_VIN\",\"display_name\":\"test\",\"state\":\"asleep\"}]}"):"{\"response\":{\"charge_state\":{\"battery_level\":70,\"est_battery_range\":100,\"timestamp\":1767225600000}}}");}catch(Exception e){throw new AssertionError();}}
  }
  String state(String url){return Arrays.stream(URI.create(url).getRawQuery().split("&")).filter(x->x.startsWith("state=")).findFirst().orElseThrow().substring(6);}
+ @Test void remembersSelectedVehicleAcrossListRefreshAndRestoresOnlyAuthorizedCar()throws Exception{
+  var f=new Fake();var svc=new TeslaIntegration("id","secret","https://example.test/callback",f,new MutableClock());var s=new TeslaIntegration.Session();
+  svc.callback(s,state(svc.begin(s,true)),"code",null);String id=svc.vehicles(s).get(0).id();svc.select(s,id);
+  assertEquals(id,svc.vehicles(s).get(0).id());assertTrue(svc.locationReady(s));
+  f.empty=true;assertTrue(svc.vehicles(s).isEmpty());assertEquals("NO_VEHICLE_SELECTED",assertThrows(TeslaIntegration.Failure.class,()->svc.location(s)).code);
+  f.empty=false;f.online=true;f.location=true;
+  assertEquals("LIVE",svc.location(s).status());assertTrue(svc.locationReady(s));
+  svc.disconnect(s);assertEquals("NOT_CONNECTED",assertThrows(TeslaIntegration.Failure.class,()->svc.location(s)).code);
+ }
  @Test void locationWithoutOptInNeverCallsVehicle()throws Exception {
   var gateway=new Fake();
   var service=new TeslaIntegration("id","secret","https://example.test/callback",gateway,new MutableClock());

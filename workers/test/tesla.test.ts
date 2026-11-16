@@ -91,6 +91,27 @@ describe('Tesla OAuth and Fleet mock-only',()=>{
   it('rejects malformed vehicle/token responses without returning upstream bodies',async()=>{const a=await authenticated();external(()=>json({response:[{secret:'do-not-return'}]}));const r=await a.post('vehicles');expect(await r.json()).toEqual({error:'INVALID_RESPONSE'});const b=await login();external(()=>json({access_token:'secret'}));const cb=await call('/api/tesla/callback?state='+b.state+'&code=x',undefined,{headers:b.headers,env:b.env});expect(await cb.json()).toEqual({error:'TOKEN_RESPONSE_INVALID'});});
   it('does not wake sleeping vehicles or request location without scope',async()=>{const a=await authenticated();const fn=external(()=>json({response:{state:'asleep'}}));expect(await(await a.post('location')).json()).toEqual({error:'OFFLINE_OR_ASLEEP'});expect(fn).toHaveBeenCalledTimes(1);const b=await authenticated({locationGranted:false});expect(await(await b.post('location')).json()).toEqual({error:'PERMISSION_DENIED'});expect(fn).toHaveBeenCalledTimes(1);});
   it('parses live location only after online and privacy checks',async()=>{const a=await authenticated();external(url=>json({response:url.endsWith('location_data')?{drive_state:{latitude:37.5,longitude:127,timestamp:Date.now()}}:{state:'online'}}));expect(await(await a.post('location')).json()).toMatchObject({status:'LIVE',latitude:37.5,longitude:127,locationStatus:'AVAILABLE',stale:false});});
+  it('preserves the selected car and opaque ID when the vehicle list is refreshed',async()=>{
+    const a=await authenticated();
+    external(url=>json({response:url.endsWith('/vehicles')?[{vin:'TEST-VIN',display_name:'Selected Tesla',state:'online'}]:url.endsWith('location_data')?{drive_state:{latitude:37.5,longitude:127,timestamp:Date.now()}}:{state:'online'}}));
+    expect(await(await a.post('vehicles')).json()).toMatchObject([{id:'car'}]);
+    expect(await(await a.post('vehicles')).json()).toMatchObject([{id:'car'}]);
+    const l=await new Sessions(a.env).open(a.id);expect(l.data.selected).toBe('car');expect(l.data.lastVehicle).toBe('TEST-VIN');delete l.data.selected;await l.save(true);
+    expect(await(await a.post('location')).json()).toMatchObject({status:'LIVE',latitude:37.5});
+  });
+  it('restores a remembered car only after finding it in the current authorized list',async()=>{
+    const a=await authenticated({vehicles:{},selected:undefined,lastVehicle:'TEST-VIN'});
+    const fn=external(url=>json({response:url.endsWith('/vehicles')?[{vin:'other-vin'},{vin:'TEST-VIN'}]:url.endsWith('location_data')?{drive_state:{latitude:37.5,longitude:127,timestamp:Date.now()}}:{state:'online'}}));
+    expect(await(await a.post('location')).json()).toMatchObject({status:'LIVE'});
+    expect(fn.mock.calls[1][0]).toContain('/TEST-VIN');expect(fn.mock.calls).toHaveLength(3);
+    const stored=await a.env.DB.prepare('SELECT ciphertext FROM sessions').all();expect(JSON.stringify(stored)).not.toContain('TEST-VIN');
+  });
+  it('does not silently choose a different or first vehicle when the last selection is missing',async()=>{
+    const a=await authenticated({selected:undefined});const fn=external(()=>json({response:[{vin:'other-vin'}]}));
+    expect(await(await a.post('location')).json()).toEqual({error:'NO_VEHICLE_SELECTED'});expect(fn).not.toHaveBeenCalled();
+    const b=await authenticated({selected:undefined,vehicles:{},lastVehicle:'removed-vin'});
+    expect(await(await b.post('location')).json()).toEqual({error:'NO_VEHICLE_SELECTED'});expect(fn).toHaveBeenCalledTimes(1);
+  });
   it('maps abortable upstream timeout and never retries',async()=>{
     const a=await authenticated();vi.useFakeTimers();try{const fn=external((_url,init)=>new Promise((_resolve,reject)=>{init?.signal?.addEventListener('abort',()=>reject(new Error('aborted')));}));const pending=a.post('vehicles');await vi.advanceTimersByTimeAsync(11000);const r=await pending;expect(await r.json()).toEqual({error:'VEHICLE_LIST_SERVICE_UNAVAILABLE'});expect(fn).toHaveBeenCalledTimes(1);}finally{vi.useRealTimers();}
   });

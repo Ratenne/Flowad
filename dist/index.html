@@ -121,6 +121,13 @@
             </svg></button>
         </div>
         <p class="panel-sub" id="resultsSubtitle">목적지는 비워두세요.<br>오늘 어울리는 길을 찾아드릴게요.</p>
+        <label class="origin-environment">사용 환경
+          <select id="locationEnvironment" aria-label="사용 환경과 기본 위치 출처">
+            <option value="device">PC·모바일 — 이 기기 위치</option>
+            <option value="tesla">Tesla 차량 — 차량 위치</option>
+          </select>
+        </label>
+        <p class="location-source-note" id="locationSourceNote">이 기기의 브라우저 위치를 사용합니다. 차량과 같은 곳일 수도 있습니다.</p>
         <p class="location-summary" id="mainLocationStatus" role="status" aria-live="polite">브라우저 GPS 또는 설정 → 차량의 Tesla 차량 위치를 출발지로 사용할 수 있어요.</p>
         <p class="result-status" id="resultStatus" role="status" aria-live="polite"></p>
         <div class="quick-controls">
@@ -133,7 +140,7 @@
         </div>
         <div id="locationEmpty" class="start-state"><button id="emptyLocate" class="button-primary"><svg>
               <use href="#i-location" />
-            </svg>내 위치에서 추천<svg class="arrow">
+            </svg><span id="emptyLocateLabel">이 기기 위치에서 추천</span><svg class="arrow">
               <use href="#i-arrow" />
             </svg></button><button id="demoBtn" class="button-secondary">체험 코스 보기<svg aria-hidden="true" class="arrow">
               <use href="#i-arrow" />
@@ -357,8 +364,11 @@
         </svg></button>
     </header>
     <div class="location-body">
-      <p id="locationRecovery" role="status"></p><button id="retryLocation" type="button" class="button-secondary">GPS
-        다시 측정</button><label for="citySearch">출발 지역 검색</label><input id="citySearch" type="search"
+      <p id="locationRecovery" role="status"></p><button id="retryLocation" type="button" class="button-secondary">이 기기 위치 다시 측정</button>
+      <button id="useApproximateLocation" type="button" class="button-secondary" hidden>대략적인 기기 위치로 추천</button>
+      <button id="recoveryTeslaLocation" type="button" class="button-secondary">Tesla 차량 위치로 조회</button>
+      <p class="settings-note">기기 위치와 차량 위치는 같을 수도, 다를 수도 있습니다. 선택한 위치 출처를 출발지로 사용합니다.</p>
+      <label for="citySearch">출발 지역 검색</label><input id="citySearch" type="search"
         placeholder="서울, 강릉, 부산…" autocomplete="off">
       <div id="cityChoices" class="city-choices"></div>
       <p class="settings-note">지역의 중심 좌표로 추천합니다. 현재 예시 코스는 수도권·강릉·부산 주변에 준비되어 있습니다.</p>

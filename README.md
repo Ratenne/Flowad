@@ -1,5 +1,7 @@
 # 결론 (결 + 로드)
 
+> 2026-10-30 Pleos 검증 업데이트: Android Gradle 빌드·단위 테스트·Pleos AVD 실행·실제 경로 요청·주행 제한 차단을 확인했습니다. 실제 도착 콜백과 다음 구간 전송은 미검증입니다. 아래의 이전 Android 초안 설명보다 [최신 4단계 기록](PLEOS_STAGE4.md)을 우선 확인하세요.
+
 A location-first Korean drive discovery MVP. The visitor supplies a starting location, never a destination. The app selects courses automatically from a small editorial seed catalog.
 
 ## 1단계: 공통 추천 API (로컬 개발)

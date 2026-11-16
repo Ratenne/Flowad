@@ -37,3 +37,6 @@ secrets*.json
 .openai/
 .DS_Store
 Thumbs.db
+
+# Gradle bootstrap is source-controlled
+!pleos-android/gradle/wrapper/gradle-wrapper.jar

@@ -21,6 +21,7 @@ public class Routing {
     public Routing(ObjectMapper mapper,RoadProvider provider) throws Exception { this.anchors=mapper.readTree(getClass().getResourceAsStream("/anchors.json")); this.provider=provider; }
     public Route create(String id,double lat,double lng,double returnLat,double returnLng,int stopMinutes) throws RoutingFailure {
         validCoordinate(lat,lng); validCoordinate(returnLat,returnLng);
+        if(stopMinutes<0||stopMinutes>1440)throw new RoutingFailure("INVALID_STOP_TIME");
         JsonNode course=anchors.path(id); if(!course.isObject()) throw new RoutingFailure("WAYPOINTS_UNAVAILABLE");
         List<Point> points=new ArrayList<>(); List<String> warnings=new ArrayList<>();
         points.add(new Point(0,"ORIGIN","출발지",lat,lng,"USER_INPUT","NOT_VERIFIED",null));

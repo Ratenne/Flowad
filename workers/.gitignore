@@ -1,0 +1,11 @@
+node_modules/
+.wrangler/
+build/
+build-*/
+# Local operational evidence may contain vehicle/account observations.
+evidence/
+STAGE2_DEPLOYMENT.md
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+.env*

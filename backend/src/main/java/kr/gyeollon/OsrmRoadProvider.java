@@ -11,7 +11,7 @@ import java.util.stream.Collectors;
 public class OsrmRoadProvider implements Routing.RoadProvider {
  private final ObjectMapper mapper;
  private final String base;
- private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(4)).followRedirects(HttpClient.Redirect.NEVER).build();
+ private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).followRedirects(HttpClient.Redirect.NEVER).build();
  public OsrmRoadProvider(ObjectMapper mapper,String base){
   URI uri=URI.create(base);if(!"https".equals(uri.getScheme())||uri.getHost()==null||uri.getRawQuery()!=null||uri.getUserInfo()!=null)throw new IllegalArgumentException("ROAD_ROUTING_URL must be HTTPS");
   this.mapper=mapper;this.base=base.replaceAll("/+$","");
@@ -19,12 +19,17 @@ public class OsrmRoadProvider implements Routing.RoadProvider {
  public Routing.ProviderResult route(List<Routing.Point> points)throws Routing.RoutingFailure{
   String coordinates=points.stream().map(p->p.longitude()+","+p.latitude()).collect(Collectors.joining(";"));
   try{
-   var response=client.send(HttpRequest.newBuilder(URI.create(base+"/route/v1/driving/"+coordinates+"?steps=true&geometries=geojson&overview=false&radiuses="+points.stream().map(p->"100").collect(Collectors.joining(";")))).timeout(Duration.ofSeconds(12)).GET().build(),HttpResponse.BodyHandlers.ofString());
+   var response=client.send(HttpRequest.newBuilder(URI.create(base+"/route/v1/driving/"+coordinates+"?steps=true&geometries=geojson&overview=false&radiuses="+points.stream().map(p->"100").collect(Collectors.joining(";")))).timeout(Duration.ofSeconds(90)).GET().build(),HttpResponse.BodyHandlers.ofString());
    if(response.statusCode()==429)throw new Routing.RoutingFailure("RATE_LIMIT");
    if(response.statusCode()==403)throw new Routing.RoutingFailure("PROVIDER_PERMISSION_DENIED");
-   if(response.statusCode()!=200)throw new Routing.RoutingFailure("PROVIDER_UNAVAILABLE");
-   return parse(mapper.readTree(response.body()),points);
+   JsonNode data=mapper.readTree(response.body());
+   checkStatus(response.statusCode(),data);
+   return parse(data,points);
   }catch(Routing.RoutingFailure e){throw e;}catch(InterruptedException e){Thread.currentThread().interrupt();throw new Routing.RoutingFailure("PROVIDER_UNAVAILABLE");}catch(Exception e){throw new Routing.RoutingFailure("PROVIDER_UNAVAILABLE");}
+ }
+ static void checkStatus(int status,JsonNode root)throws Routing.RoutingFailure{
+  if(status==400){String code=root.path("code").asText();throw new Routing.RoutingFailure("NoSegment".equals(code)?"WAYPOINT_TOO_FAR_FROM_ROAD":"NoRoute".equals(code)?"NO_ROAD_ROUTE":"INVALID_PROVIDER_RESPONSE");}
+  if(status!=200)throw new Routing.RoutingFailure("PROVIDER_UNAVAILABLE");
  }
  static Routing.ProviderResult parse(JsonNode root,List<Routing.Point> points)throws Routing.RoutingFailure{
   if(!"Ok".equals(root.path("code").asText()))throw new Routing.RoutingFailure("NO_ROAD_ROUTE");

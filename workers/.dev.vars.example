@@ -1,0 +1,14 @@
+# Generate two independent base64-encoded random 32-byte keys. Never commit real values.
+TOKEN_ENCRYPTION_KEY=
+NAVIGATION_TICKET_SECRET=
+TESLA_CLIENT_ID=
+TESLA_CLIENT_SECRET=
+# Only the exact registered HTTPS callback is accepted.
+TESLA_REDIRECT_URI=https://ravirgo.com/flowad/api/tesla/callback
+# Optional, operator-controlled HTTPS endpoints; no automatic provider fallback.
+ROAD_ROUTING_URL=
+# Optional isolated batch experiment only; token is a separate Worker Secret.
+OSRM_BATCH_URL=
+OSRM_BATCH_TOKEN=
+TESLA_COMMAND_PROXY_URL=
+JUSO_MAP_API_KEY=

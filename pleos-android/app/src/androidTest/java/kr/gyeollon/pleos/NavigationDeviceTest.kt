@@ -10,7 +10,7 @@ import org.junit.Test
 import org.junit.Assert.*
 import java.io.File
 
-/** Actual SDK service test. Does not inject or synthesize navigation callbacks. */
+/** Actual SDK requests; optional simulatedArrival injects an arrival only in this test APK. */
 class NavigationDeviceTest {
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private fun texts(view: View): List<TextView> =
@@ -70,10 +70,24 @@ class NavigationDeviceTest {
                 assertTrue(dialog.isShowing)
                 dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
             }
-            val result = waitFor(activity) { it.any { text -> text.contains("안내 중") || text.contains("중지") } }
+            var result = waitFor(activity) { it.any { text -> text.contains("안내 중") || text.contains("중지") || text.contains("저장된") || text.contains("자동 검증할 수 없습니다") } }
+            if (InstrumentationRegistry.getArguments().getString("simulatedArrival") == "true" && result.any { it.contains("자동 검증할 수 없습니다") }) {
+                // Test fixture review only: never describe this as automatic coordinate verification.
+                click(activity, "차량에서 경유지 확인")
+                instrumentation.runOnMainSync {
+                    val field = MainActivity::class.java.getDeclaredField("confirmation").apply { isAccessible = true }
+                    (field.get(activity) as android.app.AlertDialog).getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+                }
+                result = snapshot(activity)
+                output.appendText("FIXTURE USER REVIEW: WAYPOINT COORDINATES UNAVAILABLE\n")
+            }
             output.appendText("AFTER REQUEST: $result\n")
+            if (result.none { it.contains("안내 중") }) instrumentation.runOnMainSync {
+                val field = MainActivity::class.java.getDeclaredField("lastWaypointCoordinates").apply { isAccessible = true }
+                output.appendText("FIXTURE WAYPOINT RESPONSE: ${field.get(activity)}\n")
+            }
             android.util.Log.i("FlowadDeviceTest", "AFTER REQUEST: $result")
-            assertTrue("No observable result: $result", result.any { it.contains("안내 중") || it.contains("중지") })
+            assertTrue("No observable result: $result", result.any { it.contains("안내 중") || it.contains("중지") || it.contains("저장된") })
             if (InstrumentationRegistry.getArguments().getString("simulatedArrival") == "true") {
                 assertTrue("First route was not confirmed: $result", result.any { it.contains("안내 중") })
                 instrumentation.runOnMainSync {

@@ -1,0 +1,234 @@
+{
+  "sourceCommit": "2ed6874daecb7784d2427351dab96b72a7086e1e",
+  "workerVersion": "339ee64d-2de0-4809-a992-135daaf9181e",
+  "cutover": "EXPLICITLY_APPROVED_AND_VERIFIED",
+  "route": "ravirgo.com/flowad*",
+  "previousWorker": "flowad-path-proxy",
+  "currentWorker": "flowad-api-stage2",
+  "functional": {
+    "origin": "https://ravirgo.com",
+    "results": [
+      {
+        "label": "base-estimate",
+        "path": "/api/recommendations",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:49 GMT",
+        "wallMs": 3194,
+        "keys": [
+          "courses",
+          "weatherExcluded",
+          "timeExcluded",
+          "routingFailed",
+          "guidance"
+        ],
+        "courseCount": 3,
+        "weatherExcluded": 0,
+        "routingFailed": 0
+      },
+      {
+        "label": "existing-ticket",
+        "path": "/api/navigation/resolve",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:50 GMT",
+        "wallMs": 1182,
+        "keys": [
+          "courseId",
+          "route"
+        ],
+        "routeStatus": "ESTIMATED_NOT_ROAD_ROUTED"
+      },
+      {
+        "label": "invalid",
+        "path": "/api/recommendations",
+        "status": 400,
+        "serverDate": "Fri, 13 Nov 2026 09:57:51 GMT",
+        "wallMs": 1219,
+        "keys": [
+          "error"
+        ],
+        "error": "Invalid recommendation request"
+      },
+      {
+        "label": "ten-weather-exclusions",
+        "path": "/api/recommendations",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:52 GMT",
+        "wallMs": 520,
+        "keys": [
+          "courses",
+          "weatherExcluded",
+          "timeExcluded",
+          "routingFailed",
+          "guidance"
+        ],
+        "courseCount": 0,
+        "weatherExcluded": 10,
+        "routingFailed": 0
+      },
+      {
+        "label": "forged-verification",
+        "path": "/api/navigation/verify",
+        "status": 400,
+        "serverDate": "Fri, 13 Nov 2026 09:57:53 GMT",
+        "wallMs": 1894,
+        "keys": [
+          "verificationStatus",
+          "roadVerified",
+          "error"
+        ],
+        "verificationStatus": "ROAD_ROUTE_UNAVAILABLE",
+        "roadVerified": false,
+        "error": "INVALID_TICKET"
+      },
+      {
+        "label": "yangpyeong-estimate",
+        "path": "/api/recommendations",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:54 GMT",
+        "wallMs": 504,
+        "keys": [
+          "courses",
+          "weatherExcluded",
+          "timeExcluded",
+          "routingFailed",
+          "guidance"
+        ],
+        "courseCount": 1,
+        "weatherExcluded": 9,
+        "routingFailed": 0
+      },
+      {
+        "label": "yangpyeong-road",
+        "path": "/api/navigation/verify",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:56 GMT",
+        "wallMs": 1143,
+        "keys": [
+          "verificationStatus",
+          "roadVerified",
+          "route",
+          "batteryStatus",
+          "withinAvailableMinutes",
+          "navigationTicket",
+          "note"
+        ],
+        "verificationStatus": "ROAD_ROUTE_VERIFIED",
+        "roadVerified": true,
+        "routeStatus": "ROAD_ROUTED"
+      },
+      {
+        "label": "verified-ticket",
+        "path": "/api/navigation/resolve",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:56 GMT",
+        "wallMs": 559,
+        "keys": [
+          "courseId",
+          "route"
+        ],
+        "routeStatus": "ROAD_ROUTED"
+      },
+      {
+        "label": "paju-estimate",
+        "path": "/api/recommendations",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:57 GMT",
+        "wallMs": 527,
+        "keys": [
+          "courses",
+          "weatherExcluded",
+          "timeExcluded",
+          "routingFailed",
+          "guidance"
+        ],
+        "courseCount": 1,
+        "weatherExcluded": 9,
+        "routingFailed": 0
+      },
+      {
+        "label": "paju-road",
+        "path": "/api/navigation/verify",
+        "status": 400,
+        "serverDate": "Fri, 13 Nov 2026 09:57:57 GMT",
+        "wallMs": 759,
+        "keys": [
+          "verificationStatus",
+          "roadVerified",
+          "error"
+        ],
+        "verificationStatus": "ROAD_ROUTE_UNAVAILABLE",
+        "roadVerified": false,
+        "error": "WAYPOINT_TOO_FAR_FROM_ROAD"
+      },
+      {
+        "label": "base-after-road-request",
+        "path": "/api/recommendations",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:58 GMT",
+        "wallMs": 520,
+        "keys": [
+          "courses",
+          "weatherExcluded",
+          "timeExcluded",
+          "routingFailed",
+          "guidance"
+        ],
+        "courseCount": 3,
+        "weatherExcluded": 0,
+        "routingFailed": 0
+      },
+      {
+        "label": "fresh-browser-d1-session",
+        "path": "/api/tesla/status",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:59 GMT",
+        "wallMs": 1113,
+        "keys": [
+          "connection",
+          "oauthStatus",
+          "locationReady",
+          "navigation",
+          "csrf",
+          "secure",
+          "message"
+        ]
+      },
+      {
+        "label": "frontend",
+        "path": "/",
+        "status": 200,
+        "serverDate": "Fri, 13 Nov 2026 09:57:59 GMT",
+        "wallMs": 1661,
+        "keys": []
+      }
+    ],
+    "roadPositivePassed": true,
+    "noSegmentPassed": true,
+    "tesla": "Fresh anonymous session/D1 only; real OAuth/Fleet not tested by this script",
+    "commandsSent": 0
+  },
+  "preservation": {
+    "checkedAt": "2026-11-13T10:04:41.233Z",
+    "rootHttp": 200,
+    "publicKeyHttp": 200,
+    "publicKeyDerUnchanged": true,
+    "sessionHttp": 200,
+    "secureHttpOnlySameSiteCookie": true,
+    "anonymousPreviewHttp": 400,
+    "anonymousError": "NOT_CONNECTED",
+    "commandsSent": 0
+  },
+  "additional": {
+    "chargingHttp": 200,
+    "chargingStatus": "ROAD_ROUTE_REQUIRED",
+    "assetHttp": 200,
+    "corsHttp": 204,
+    "browserRoadVerified": true
+  },
+  "cpu": "NOT_VERIFIED",
+  "memory": "NOT_VERIFIED",
+  "currentProductionTeslaOAuth": "NOT_VERIFIED",
+  "navigation": "COMMAND_NOT_SENT",
+  "vehicleNavigation": "NAVIGATION_NOT_CONFIRMED",
+  "rollbackExecuted": false
+}

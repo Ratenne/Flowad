@@ -1,0 +1,100 @@
+{
+  "status": "FAILED_CPU_STABILITY",
+  "comparison": {
+    "direct": {
+      "requests": 24,
+      "cpuMs": {
+        "n": 24,
+        "min": 10,
+        "median": 12,
+        "p95": 16,
+        "max": 33,
+        "over10": 21
+      },
+      "workerWallMs": {
+        "min": 2092,
+        "median": 2153,
+        "p95": 2817,
+        "max": 3673
+      },
+      "clientWallMs": {
+        "min": 2432,
+        "median": 2600,
+        "p95": 3776,
+        "max": 4561
+      },
+      "clientDecodedBytes": {
+        "min": 9185,
+        "median": 13777,
+        "p95": 13910,
+        "max": 13910
+      },
+      "httpErrorCount": 0,
+      "emptyRecommendations": 0,
+      "platformNonOk": 0,
+      "colos": [
+        "LAX"
+      ]
+    },
+    "batch": {
+      "requests": 36,
+      "cpuMs": {
+        "n": 36,
+        "min": 3,
+        "median": 5,
+        "p95": 7,
+        "max": 23,
+        "over10": 1
+      },
+      "workerWallMs": {
+        "min": 1010,
+        "median": 1111,
+        "p95": 1421,
+        "max": 1446
+      },
+      "clientWallMs": {
+        "min": 1419,
+        "median": 2027,
+        "p95": 4300,
+        "max": 6298
+      },
+      "clientDecodedBytes": {
+        "min": 9185,
+        "median": 13777,
+        "p95": 13910,
+        "max": 13910
+      },
+      "httpErrorCount": 0,
+      "emptyRecommendations": 0,
+      "platformNonOk": 0,
+      "colos": [
+        "LAX"
+      ]
+    },
+    "contractHashesMatched": 36,
+    "distinctInputCases": 12,
+    "ignoredDynamicFields": [
+      "generatedAt",
+      "navigationTicket"
+    ],
+    "batchPostFirstCpuMs": {
+      "min": 3,
+      "median": 4,
+      "p95": 6,
+      "max": 7
+    },
+    "fixedDeployment": true
+  },
+  "ignoredDynamicFields": [
+    "generatedAt",
+    "navigationTicket"
+  ],
+  "architecture": "Separate experimental Render Node adapter -> unchanged Render OSRM. Not co-located; does not remove Render.",
+  "limitations": [
+    "One Cloudflare colo LAX, sequential requests; not a load/SLA proof",
+    "First batch invocation23ms; warm35 invocations all<=10ms does not prove cold stability",
+    "Original OSRM CPU/RAM cannot be inferred from separate adapter process metrics",
+    "No real TLS/DNS/service timeout stress test or forced production restart",
+    "No real Tesla calls, navigation commands, Android or Pleos development"
+  ]
+}

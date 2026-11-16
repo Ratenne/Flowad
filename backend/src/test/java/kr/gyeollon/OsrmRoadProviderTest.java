@@ -20,4 +20,9 @@ class OsrmRoadProviderTest {
   var r=response();((com.fasterxml.jackson.databind.node.ObjectNode)r.path("routes").get(0).path("legs").get(0)).put("distance",-1);assertThrows(Routing.RoutingFailure.class,()->OsrmRoadProvider.parse(r,points));
   assertThrows(IllegalArgumentException.class,()->new OsrmRoadProvider(mapper,"http://example.com"));
  }
+ @Test void unrouteableCandidateDoesNotBecomeProviderOutage()throws Exception{
+  assertEquals("WAYPOINT_TOO_FAR_FROM_ROAD",assertThrows(Routing.RoutingFailure.class,()->OsrmRoadProvider.checkStatus(400,mapper.readTree("{\"code\":\"NoSegment\"}"))).code);
+  assertEquals("NO_ROAD_ROUTE",assertThrows(Routing.RoutingFailure.class,()->OsrmRoadProvider.checkStatus(400,mapper.readTree("{\"code\":\"NoRoute\"}"))).code);
+  assertEquals("PROVIDER_UNAVAILABLE",assertThrows(Routing.RoutingFailure.class,()->OsrmRoadProvider.checkStatus(503,mapper.readTree("{}"))).code);
+ }
 }

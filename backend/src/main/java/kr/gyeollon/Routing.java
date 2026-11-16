@@ -44,6 +44,17 @@ public class Routing {
         warnings.add("경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다.");
         return new Route(List.copyOf(points),List.copyOf(result.legs()),Math.round(km*10)/10.0,seconds,stopMinutes*60,seconds+stopMinutes*60,result.status(),result.provider(),Instant.now().toString(),result.geometryStatus(),terrainStatus(id),List.copyOf(warnings));
     }
+    public Route destination(String name,double lat,double lng,double originLat,double originLng)throws RoutingFailure {
+        validCoordinate(lat,lng);validCoordinate(originLat,originLng);
+        if(name==null||name.isBlank()||name.length()>120)throw new RoutingFailure("INVALID_WAYPOINT");
+        var points=List.of(new Point(0,"ORIGIN","도로 검증 출발 기준점",originLat,originLng,"USER_INPUT","NOT_VERIFIED",null),new Point(1,"DESTINATION",name,lat,lng,"USER_INPUT","NOT_VERIFIED",null));
+        var result=provider.route(points);
+        if(result==null||!"ROAD_ROUTED".equals(result.status()))throw new RoutingFailure("ROAD_ROUTE_REQUIRED");
+        if(result.legs()==null||result.legs().size()!=1)throw new RoutingFailure("INCOMPLETE_ROUTE");
+        var leg=result.legs().get(0);
+        if(leg.fromOrder()!=0||leg.toOrder()!=1||!Double.isFinite(leg.distanceKm())||leg.distanceKm()<=0||leg.durationSeconds()<=0||leg.geometry()==null||leg.geometry().size()<2)throw new RoutingFailure("INCOMPLETE_ROUTE");
+        return new Route(points,result.legs(),Math.round(leg.distanceKm()*10)/10.0,leg.durationSeconds(),0,leg.durationSeconds(),result.status(),result.provider(),Instant.now().toString(),result.geometryStatus(),"UNAVAILABLE",List.of("OSM 도로 연결 검증이며 현재 통행 가능 여부는 미확인입니다.","Tesla는 차량 현재 위치에서 경로를 다시 계산합니다."));
+    }
     static String terrainStatus(String id){
         if(!id.matches("[a-z0-9-]+"))return "UNAVAILABLE";
         return java.nio.file.Files.isRegularFile(java.nio.file.Path.of("../dist/terrain",id+".json"))||java.nio.file.Files.isRegularFile(java.nio.file.Path.of("dist/terrain",id+".json")) ? "HIGHLIGHT_ONLY" : "UNAVAILABLE";

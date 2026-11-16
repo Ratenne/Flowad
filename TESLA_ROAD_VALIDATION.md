@@ -1,52 +1,79 @@
-> 후속 요청: 유료 생성을 보류한 뒤 사용자가 Render Free 배포를 승인했다. 최신 도로 서버 진행·실측은 [무료 배포 기록](deploy/ROADS_FREE.md)을 참조한다.
+# 도로·Tesla 실연동 검증 기록
 
-# 도로 계산 및 Tesla 목적지 전송
+## 경유지 전송과 위치 측정 변경
 
-2026-10-31 구현. 실제 계정 인증·차량 전송·배포는 아직 수행하지 않았다.
+- 이전 코스 화면은 서버에서 왕복을 검증한 뒤 사용자가 고른 지점 하나만 `navigation_request`로 보냈다. 반복 클릭 시 같은 계획은 거부됐으나 새 계획을 만들면 다시 단일 목적지 명령을 보낼 수 있었다. 사용자 실차 관찰에서 이 전송은 기존 목적지를 교체했다. 서버가 모든 경유지를 순회하는 구현은 없었다.
+- Tesla 공식 문서에는 `navigation_waypoints_request`와 `navigation_gps_request`가 있지만, 공개 문서에서 본문·개수·차종/펌웨어 조건을 확보하지 못했다. 공개 공식 프록시에는 이 두 명령이 확인되지 않았다. [Tesla 명령 문서](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands), [공식 프록시](https://github.com/teslamotors/vehicle-command/blob/main/pkg/proxy/command.go), [미병합 경유지 제안](https://github.com/teslamotors/vehicle-command/pull/443).
+- 코스 미리보기는 경유지 순서를 보존하고 동일 좌표를 제거하되 최종 목적지/복귀 지점은 마지막에 유지한다. 일괄 전송은 `UNSUPPORTED`다. 차량 내비에서 표시된 순서대로 직접 경유지를 추가하거나 교체에 동의한 경우에만 `navigation_request`로 한 지점을 보낸다. 기존 `vehicle_cmds` 및 온라인 차량 확인을 사용한다.
+- 단일 목적지 전송은 세션에서 계획당 1회다. API 접수 또는 결과 불명 시 화면 확인을 기록하기 전까지 같은 세션에서 새 명령 계획을 만들 수 없다. `VEHICLE_CONFIRMED`는 화면을 직접 본 사용자가 일치를 선택했을 때만 기록된다. 세션 만료·재시작·다른 브라우저에는 상태를 공유하지 않는다. 결과가 불명확하면 재접속 후에도 차량 화면을 먼저 확인한다.
+- 실차 검증은 정차 중 시작한다. 차량 내비에 기존 목적지를 설정하고, 전체 코스 미리보기의 경유지 순서와 일괄 전송 제한을 확인한다. 목적지 교체가 필요한 경우에만 한 지점을 명시적으로 선택해 보낸다. API 접수와 차량 화면 표시를 각각 기록하고, 경유지는 차량에서 직접 추가한다.
+- 브라우저 위치는 고정밀 단발 측정 후 필요하면 제한 시간 동안 추가 샘플을 받는다. 100m 이하·15초 이내 샘플만 추천 출발지로 확정한다. 캐시는 브라우저 메모리에서만 유지되며 권한이 이미 있고, 고정밀 및 정지로 측정된 5초 이내 위치에만 사용한다. Tesla 위치는 별도 출처이며 정확도 미제공으로 표시한다. 실패 시 GPS 재측정 또는 출발 지역을 직접 선택할 수 있다.
+- 자동 검증은 `mvn -f backend/pom.xml test`와 `node scripts/test-location.mjs`로 재현한다. 이번 변경에서는 실차 API 명령과 차량 내비 화면을 검증하지 않았다.
 
-## 현재 동작
+2026-10-31. 대상: Tesla Model Y / 롯데월드 어드벤처 부산(사용자 지정).
 
-- ROAD_ROUTING_URL을 설정하면 OSRM driving 서비스로 출발→모든 경유지→복귀 전체 도로를 계산한다. 각 입력점의 도로 스냅 100m 이내, 구간 수·거리·시간·좌표·구간 양끝을 검증한다. 도로 서버 실패 시 추정으로 성공 처리하지 않는다. 이는 OSM 도로 연결 검증이며 현재 통행·사유지 진입 보증이 아니다.
-- 휴대폰 코스 상세에서 `전송할 경로 확인` → 목적지 선택 → 전송. 경로 확인 시 출발·경유지 좌표는 설정한 도로 서버로 전송된다. 로그인 시 `내비 목적지 전송 권한 요청`을 선택해 vehicle_cmds를 요청한다. 기존 연결은 해제 후 재로그인한다. 실제 토큰의 scope에 vehicle_cmds가 있어야 전송한다.
-- 서버가 도로를 재계산하고 5분 유효한 차량 종속 계획을 만든다. 한 계획은 선택한 목적지 1개에 한 번만 사용한다. 중복 클릭, 차량 변경, 만료, 추정 경로를 차단한다. API 실패·타임아웃은 자동 재전송하지 않는다.
-- navigation_request는 Tesla 공식 command.go에서 REST 예외로 처리된다. 따라서 이 한 명령에는 별도 서명 프록시 없이 Fleet REST에 요청할 수 있다. TESLA_COMMAND_PROXY_URL을 지정하면 해당 HTTPS 프록시를 통해 요청한다. 다른 차량 명령은 이 경로로 허용하지 않는다.
-- 전송은 현재 차량 목적지를 바꿀 수 있다. 경유지 전체 일괄 등록과 특정 도로선 강제는 미지원이다. 공식 프록시 main의 navigation_gps_request/navigation_waypoints_request 처리 부재로 이번 구현에 추측 스키마를 추가하지 않았다.
-- REQUEST_ACCEPTED는 Tesla API 접수, UNKNOWN은 결과 불명, FAILED는 거부다. 차량 화면 일치 버튼은 USER_CONFIRMED 사용자 확인일 뿐 자동 차량 반영 검증이 아니다. 다음 지점은 정차·도착 후 새 계획으로 선택한다.
+## 현재 실측 결과 (2026-11-01)
 
-## Render 설정
+- 공개키 HTTPS 제공: HTTP 200, 예상 P-256 공개키 지문 일치.
+- 북미·아태 Tesla 파트너 등록: REGISTERED_AND_VERIFIED 실제 확인. 이후 TESLA_REGISTER_PARTNER=false 저장·저장 값 확인 완료.
+- 사용자 OAuth: 기존 차량 조회·명령 권한으로 재연결 성공. 프로필·위치 권한 추가 요청 없음.
+- 실제 차량 목록: 고정 북미·아태 Fleet API의 /api/1/vehicles 조회 성공, 접근 가능한 차량 0대. 테스트 Model Y 선택 불가. 사용자가 차량이 있는 다른 계정으로 로그인해야 한다고 확인함. 실제 Model Y 계정의 로그인 대기.
+- 목적지 명령: NOT_SENT. 실제 차량 내비 화면: NOT_CONFIRMED.
+- 실제 OSRM: 공개 부산시청 기준 롯데월드 부산 16.4km(이전 검증), 2026-11-01 최근접 도로 재확인 28.7041m. 실제 차량 위치 경로가 아님.
+- 코드 검증: Java 43건, 실패·오류 0. 최신 배포 523571990d33bacfdd31d7db12c0413ebb73e50c / Render dep-dbjblq15efls73ds1vc0.
+- 결제 한도는 0원 유지. 개인키 업로드·차량 가상키 페어링·명령 프록시 배포·자동 깨우기 없음.
 
-확인한 기존 변수: TESLA_CLIENT_ID, TESLA_CLIENT_SECRET, TESLA_REDIRECT_URI. 비밀 값은 읽거나 복사하지 않았다.
+## 연결
 
-1. `deploy/osrm/Dockerfile`로 대한민국 OSM 도로 서버를 만들고 완료된 HTTPS 주소를 기존 Flowad의 ROAD_ROUTING_URL에 지정한다. `deploy/render-roads.yaml`은 **유료 standard 계획 제안**이며 적용하지 않았다. 지도 전처리 빌드와 런타임 메모리는 실제 빌드·부하 검사로 확인해야 하며 아직 보장하지 않는다. 지도 업데이트는 새 이미지를 빌드해 배포한다.
-2. 무료 공개 OSRM 데모는 테스트 정책·가용성·좌표 전송을 확인한 단발 검증에만 사용하고 운영 URL로 지정하지 않는다.
-3. Render 신뢰 프록시에서 TLS가 종료되면 SERVER_FORWARD_HEADERS_STRATEGY=native 적용 전 ingress가 외부 Forwarded/X-Forwarded-*를 덮어쓰는지 확인한다. HTTPS_REQUIRED를 제거하지 않는다.
-4. 승인된 Tesla 개발자 앱의 redirect URI와 vehicle_cmds 권한을 확인하고 실제 OAuth를 진행한다. 토큰·개인키를 브라우저 코드나 Git에 넣지 않는다.
-5. 기존 Dockerfile로 Flowad를 배포한다. 이 변경은 아직 push/운영 배포하지 않았다.
+- OSRM: https://flowad-roads.onrender.com (사용자 소유 Render Free)
+- TESLA_COMMAND_PROXY_URL: 현재 설정 없음. 공식 command.go에서 navigation_request가 ErrCommandUseRESTAPI로 처리되므로 이 단일 목적지 명령은 Fleet REST로 전송한다. 설정이 있으면 HTTPS 프록시를 사용한다. GPS·경유지 일괄 전송과 기타 차량 명령은 지원하지 않는다.
+- Tesla 인증은 Render의 기존 환경변수를 사용한다. 비밀 값을 읽거나 소스에 복사하지 않는다.
+- `/tesla-check.html`에서 로그인, 차량 조회·선택, 도로 검증, 목적지 전송, 사용자 차량 확인을 각각 수행한다.
+- 실차 목적지는 부산광역시 기장군 기장읍 동부산관광로 42. 도로 검증 좌표 35.19602,129.2132는 부산관광공사 공식 페이지 지도 데이터다. OSRM 최근접 도로 스냅 거리는 28.70m로 확인했다. Tesla로는 공식 명칭과 도로명 주소를 보낸다.
+- 검증 출발점은 공개 기준점인 부산시청(35.1796,129.0756)이며 차량 위치가 아니다. 차량 위치 권한은 요청하지 않는다. Tesla는 차량 위치에서 경로를 다시 계산한다.
 
-## 실차 검증 기록표
+## 판정 원칙
 
-아래 항목은 테스트 차량 소유자가 정차 상태에서 실제로 수행하고 결과를 기록해야 한다. 목 테스트를 통과해도 실차 통과로 기재하지 않는다.
+실제 도로 응답, API 접수, 차량 화면 반영, 사용자 확인은 별도다. 사용자 확인은 자동 차량 반영 확인으로 표시하지 않는다. 계획은 선택 차량에 묶이며 5분 유효·1회 전송이다. 시간 초과 시 자동 재전송하지 않는다. 저장소·로그에 토큰/VIN/개인 위치를 남기지 않는다.
 
-| 항목 | 결과 |
-|---|---|
-| 차종·MCU·차량 펌웨어·모바일 앱 버전 | 미기록 |
-| HTTPS callback/state 검증 및 scope vehicle_cmds | 미실행 |
-| 차량 목록과 선택 차량 이름 | 미실행 |
-| 도로 서버 왕복 구간·스냅·마지막 복귀 지점 | 미실행 |
-| 가까운 목적지 1개 전송 후 API 상태·차량 이름/좌표 일치 | 미실행 |
-| 다음 경유지와 복귀 지점 각각 수동 전송 | 미실행 |
-| 차량 절전·권한 거부·중복·응답 유실 처리 | 목 테스트 / 실차 미실행 |
-| 전체 경유지 일괄 등록 | 미지원 |
+## 진행 상태
 
-응답 원문·VIN·토큰·정확한 자택 위치는 기록이나 스크린샷에 남기지 않는다.
+- 대한민국 OSRM 배포와 서울·부산·제주·장거리·왕복 실제 응답: 이전 단계 통과.
+- Model Y·기장 롯데월드 검증 화면 및 서버 명령: 구현, Java 28건 통과. PR #1을 main에 반영하고 Render 배포 완료(3907e5b8cac811ca2ec3b99fbbb6028a9fe82735).
+- 실제 OSRM을 거친 Java 목적지 경로: 부산시청 기준 16.4km. 추천 API에서는 부산 해안 코스 55.3km / 왕복 4구간을 확인했다.
+- 일부 경유지가 도로 100m 안에 없어 제외되는 후보는 다른 후보 계산을 중단시키지 않도록 NoSegment와 제공자 장애를 구분했다.
+- Render ROAD_ROUTING_URL 설정 저장 완료. 기존 Tesla 인증정보 값은 조회·복사하지 않았다.
+- 실제 OAuth 시작: 운영 HTTPS 검증 화면에서 Tesla 공식 로그인 페이지로 이동 확인. 사용자 로그인·권한 동의 완료, 운영 서버에서 CONNECTED 확인.
+- 실제 차량 목록 조회는 지역 조회 단계에서 REGION_ENDPOINT_UNAVAILABLE로 중단됐다. 기존 코드가 HTTP 404와 412를 같은 NO_DATA로 변환하여 상태를 구분할 수 없었다. HTTP 412 사전 조건, 402 결제, 421 지역 오류를 분리하고 캐시 조회의 412만 NO_DATA로 유지한다. 원문 응답이나 인증정보는 기록하지 않는다.
+- 차량 목록·내비 전송·차량 표시: 아직 미확인. 결과 확보 후 갱신한다.
 
 ## 근거
 
+- https://developer.tesla.com/docs/fleet-api/authentication/third-party-tokens
 - https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands
-- https://github.com/teslamotors/vehicle-command/blob/main/pkg/proxy/command.go (`navigation_request` → ErrCommandUseRESTAPI)
-- https://project-osrm.org/docs/v5.24.0/api/ (Route, Waypoint, steps geometry)
-- https://download.geofabrik.de/asia/south-korea.html
+- https://github.com/teslamotors/vehicle-command/blob/main/pkg/proxy/command.go
+- https://visitbusan.net/kr/index.do?lang_cd=ko&menuCd=DOM_000000201001001000&uc_seq=1310
 
-검증 결과: Java 23건 통과(실제 수는 surefire 보고서 참조), 엔진·지형·배터리 검사 통과. 공개 OSRM의 서울 시청→강남역 예시 1구간에서 code=Ok, 도로 스냅 약 56m/2m 응답을 확인했다. 해당 실제 응답을 새 OsrmRoadProvider.parse에 재생하여 스냅·구간·geometry 검증 통과도 확인했다. 사용자가 유료 서버 생성을 보류해 운영 서버·실차 검증은 미수행.
 
-검증 명령: `mvn -f backend/pom.xml test`, `node --check dist/app.js`, `node scripts/test-engine.mjs`, `node scripts/test-terrain.mjs`, `node scripts/test-battery.mjs`.
+## 2026-11-01 파트너 등록 준비
+
+- PR #2 배포 후 실제 지역 조회에서 HTTP 412(PRECONDITION_FAILED)를 확인했다. OAuth 로그인·동의와 API 파트너 등록은 별개다. 차량 조회·명령은 성공하지 않았다.
+- 등록 도메인의 공개키 주소가 PEM 대신 일반 페이지를 반환했다. ravirgo 사이트 PR #5에서 P-256 공개키와 Content-Type을 추가했다. 운영 HTTPS에서 HTTP 200, text/plain, 공개키 DER 지문 일치를 실제 확인했다. 인증이나 쿠키 없이 식별용 User-Agent Flowad-Tesla-Partner-Setup/1.0으로 조회했다.
+- 공개키 DER SHA-256: `3a6e1f167161a66fc2e3941ff2da908ed8f0cbb5d38c9e105fca59bd097ad3c9`. 개인키는 저장소 밖 로컬 `~/Library/Flowad/tesla/private-key.pem`에 0600, 상위 폴더 0700으로 보관한다. 서버·브라우저·채팅으로 복사하지 않는다.
+- `TeslaPartnerRegistration`은 기본 비활성이다. 운영자가 Render의 `TESLA_REGISTER_PARTNER=true`로 켠 경우에만 시작 시 한 번 실행한다. 공개 HTTPS 키와 포함된 예상 키의 일치를 먼저 확인하고, Render의 기존 앱 인증정보로 파트너 토큰을 받아 북미·아태 API에 `ravirgo.com`을 등록한다. 이 코드에는 공개 관리자 HTTP 엔드포인트가 없다.
+- 기존 공개키 조회가 200이면 일치 여부만 확인하고 등록을 보내지 않는다. 404/412일 때만 등록을 시도한다. 오류 시 반복 요청하지 않으며 상태 코드와 고정 결과만 로그에 남긴다. 원문·토큰·앱 비밀 값은 남기지 않는다.
+- 등록 후 즉시 `TESLA_REGISTER_PARTNER`를 제거하거나 false로 저장한다. 이후 재시작에 등록이 재실행되지 않도록 해야 한다. 가상키 페어링, 개인키 업로드, 프록시 배포, 결제 한도 변경은 수행하지 않는다.
+- 서버 파트너 등록은 아직 활성화·실행하지 않았다. 공개키 확인 → 등록 활성화 → 실제 지역/차량 조회 → 사용자 지정 목적지 전송 → 실제 차량 화면 확인 순으로 진행한다.
+
+- 승인 후 PR #3 배포(ffe926d)에서 공개키 사전 검사·파트너 토큰 발급은 통과했다. 기존 키 조회는 HTTP 403으로 중단되어 등록 POST는 전송하지 않았다(KEY_LOOKUP_HTTP_403). 등록 플래그는 false로 되돌렸다. 응답 원문 없이 미등록·범위 부족 등 고정 오류 분류를 추가하고, Tesla의 SEC1 16진수 공개키와 PEM을 비교하도록 보완한다.
+
+- PR #4 배포(c9e333c)에서도 키 조회 HTTP 403_UNCLASSIFIED로 중단했다. 등록 POST는 미전송이다. 개발자 앱 화면에서 프로필·차량 정보·차량 명령 범위가 이미 승인되어 있음을 읽기 전용으로 확인했다. 계정 관리용 파트너 토큰에 openid/user_data를 포함하도록 보완한다. 사용자 OAuth 범위, 앱 승인 설정, 위치·충전 범위와 결제 한도는 변경하지 않는다.
+
+- PR #5 배포(ff1565c)에서도 기존 키 조회가 403_UNCLASSIFIED였다. 운영자의 초기 등록 승인을 받은 작업에 한해, 공개키가 일치하고 기존 키 조회가 403 미분류/미등록인 경우 초기 등록 POST를 진행하도록 변경한다. 이는 등록 이전 일반 API 조회가 차단되는 경우를 처리한다. 기존 키 조회가 200이면 교체하지 않으며 명시적 범위 부족은 중단한다. 최초 등록 POST의 실제 결과는 후속 확인한다.
+
+- 2026-11-01 12:58 KST 초기 등록 POST와 재조회 결과 REGISTERED_AND_VERIFIED를 확인했다(de1ba94, Render dep-dbjbgr95efls73drtu6g). 공개키 DER/SEC1 일치 검증을 통과했다. 이후 TESLA_REGISTER_PARTNER=false 저장과 실제 저장 값 false를 확인했다.
+- 사용자 OAuth 재연결은 성공했으며 차량 조회는 REGION_MISMATCH_OR_UNCONFIRMED에서 중단했다. 지역 API 주소의 끝 슬래시 정규화와 고정 지역 오류 구분을 보완한다. 실제 차량 목록과 명령은 아직 미검증이다.
+
+- PR #7 운영 재검증에서 계정 지역 응답의 API 주소가 누락되어 차량 조회 전 사전 확인이 중단됐다. 프로필 권한을 추가 요청하지 않고, 이미 동의한 vehicle_device_data로 고정 북미·아태 `/api/1/vehicles`를 직접 조회하도록 정리한다. Fleet API의 421 지역 오류와 권한 오류는 중단하고 다른 지역으로 자동 요청하지 않는다. 사용자 위치·프로필 조회 없이 세션에 반환된 차량만 선택·전송할 수 있다.
+
+- 사용자가 현재 인증 계정과 Model Y가 있는 계정이 다르다고 확인했다. Tesla 공식 OAuth 예시의 prompt=login을 적용해 로그인 버튼이 기존 SSO 계정을 자동 재사용하지 않도록 한다. 사용자 차량 계정의 로그인·동의는 사용자가 직접 수행한다.

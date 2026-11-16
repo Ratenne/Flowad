@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flowad-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-12",
+  "workers_dev": false,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "ALLOWED_ORIGINS": "https://ravirgo.com",
+    "FRONTEND_URL": "https://ravirgo.com/flowad/",
+    "API_PREFIX": "/flowad",
+    "TESLA_REDIRECT_URI": "https://ravirgo.com/flowad/api/tesla/callback"
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "flowad", "migrations_dir": "migrations" }],
+  "triggers": { "crons": ["*/30 * * * *"] }
+}

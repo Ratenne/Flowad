@@ -1,0 +1,2855 @@
+{
+  "source": "Unmodified Spring Boot 3.5.7 / Java 17; local HTTP; no external providers",
+  "cases": [
+    {
+      "name": "seoul",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 180,
+        "scenery": "forest",
+        "vehicleType": "ev"
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "yangpyeong",
+            "name": "강과 숲 사이",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 101,
+            "estimatedMinutes": 146,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "양수리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서종 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서후리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "양수리 주변",
+                  "latitude": 37.542856,
+                  "longitude": 127.32184,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.3
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서종 주변",
+                  "latitude": 37.606009,
+                  "longitude": 127.349004,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 1.1
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서후리 주변",
+                  "latitude": 37.614538,
+                  "longitude": 127.432295,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 259.6
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 35.9,
+                  "durationSeconds": 2350,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 8.75,
+                  "durationSeconds": 574,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 8.73,
+                  "durationSeconds": 572,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 47.65,
+                  "durationSeconds": 3120,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 101,
+              "drivingSeconds": 6616,
+              "stopSeconds": 2100,
+              "totalSeconds": 8716,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "gapyeong",
+            "name": "초록을 깊게 들이쉬다",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 120,
+            "estimatedMinutes": 176,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "청평 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "호명산 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "청평호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평 주변",
+                  "latitude": 37.736982,
+                  "longitude": 127.425007,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.1
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "호명산 주변",
+                  "latitude": 37.739944,
+                  "longitude": 127.493699,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 229.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평호 주변",
+                  "latitude": 37.701918,
+                  "longitude": 127.48724,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 109.7
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 51.54,
+                  "durationSeconds": 3374,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 7.14,
+                  "durationSeconds": 468,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.03,
+                  "durationSeconds": 330,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 55.82,
+                  "durationSeconds": 3654,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 119.5,
+              "drivingSeconds": 7826,
+              "stopSeconds": 2700,
+              "totalSeconds": 10526,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "siheung",
+            "name": "바람이 머무는 물길",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 87,
+            "estimatedMinutes": 135,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "물왕 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "오이도 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "배곧 해안 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "물왕 주변",
+                  "latitude": 37.37992,
+                  "longitude": 126.839629,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.625088+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 124.3
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "오이도 주변",
+                  "latitude": 37.346015,
+                  "longitude": 126.687937,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.625088+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 5.8
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "배곧 해안 주변",
+                  "latitude": 37.3697,
+                  "longitude": 126.716409,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.625088+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 49.2
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 28.41,
+                  "durationSeconds": 1860,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 16.43,
+                  "durationSeconds": 1076,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 4.3,
+                  "durationSeconds": 282,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 37.54,
+                  "durationSeconds": 2457,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 86.7,
+              "drivingSeconds": 5675,
+              "stopSeconds": 2400,
+              "totalSeconds": 8075,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 0,
+        "timeExcluded": 6,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "busan",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 35.1796,
+        "longitude": 129.0756,
+        "availableMinutes": 180,
+        "scenery": "forest",
+        "vehicleType": "ev"
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "busan-forest",
+            "name": "도시 밖, 숲의 온도",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 76,
+            "estimatedMinutes": 119,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "양산 숲길",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "내원사 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "하북 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "양산 숲길",
+                  "latitude": 35.36484,
+                  "longitude": 129.037868,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.4
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "내원사 주변",
+                  "latitude": 35.424858,
+                  "longitude": 129.0806,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 243.8
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "하북 주변",
+                  "latitude": 35.464055,
+                  "longitude": 129.087415,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 53.4
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 24.64,
+                  "durationSeconds": 1613,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 9.11,
+                  "durationSeconds": 596,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.19,
+                  "durationSeconds": 340,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 37.34,
+                  "durationSeconds": 2445,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 76.3,
+              "drivingSeconds": 4994,
+              "stopSeconds": 2100,
+              "totalSeconds": 7094,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "busan-open",
+            "name": "강 너머 넓은 하루",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 52,
+            "estimatedMinutes": 92,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "대동 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "상동 주변",
+                "description": "HISTORICAL_SNAP_FAR_ACCESS_UNCERTAIN"
+              },
+              {
+                "name": "생림 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "대동 주변",
+                  "latitude": 35.242234,
+                  "longitude": 128.981021,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.282533+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 26
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "상동 주변",
+                  "latitude": 35.278317,
+                  "longitude": 128.95497,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.282533+00:00)",
+                  "verification": "HISTORICAL_SNAP_FAR_ACCESS_UNCERTAIN",
+                  "originalSnapDistanceMeters": 922.4
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "생림 주변",
+                  "latitude": 35.32783,
+                  "longitude": 128.915821,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.282533+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 166.6
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 13.05,
+                  "durationSeconds": 855,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 5.5,
+                  "durationSeconds": 360,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 7.73,
+                  "durationSeconds": 507,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 25.91,
+                  "durationSeconds": 1696,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 52.2,
+              "drivingSeconds": 3418,
+              "stopSeconds": 2100,
+              "totalSeconds": 5518,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "과거 도로 스냅 거리가 500m를 넘는 경유지가 있어 진입이 불확실합니다.",
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "busan-coast",
+            "name": "바다를 옆자리에",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 56,
+            "estimatedMinutes": 96,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "일광 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "칠암 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "임랑 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "일광 주변",
+                  "latitude": 35.264017,
+                  "longitude": 129.232906,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.093747+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 8.8
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "칠암 주변",
+                  "latitude": 35.297768,
+                  "longitude": 129.261029,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.093747+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 25.9
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "임랑 주변",
+                  "latitude": 35.318915,
+                  "longitude": 129.264208,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.093747+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.1
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 20.17,
+                  "durationSeconds": 1321,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 5.36,
+                  "durationSeconds": 351,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 2.8,
+                  "durationSeconds": 183,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 27.25,
+                  "durationSeconds": 1784,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 55.6,
+              "drivingSeconds": 3639,
+              "stopSeconds": 2100,
+              "totalSeconds": 5739,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 0,
+        "timeExcluded": 7,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "gangneung",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.7519,
+        "longitude": 128.8761,
+        "availableMinutes": 360,
+        "scenery": "all",
+        "vehicleType": "ice",
+        "walking": false
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "gangneung-coast",
+            "name": "작은 항구의 느린 오후",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요."
+            ],
+            "estimatedRoundTripKm": 33,
+            "estimatedMinutes": 51,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "사천항 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "영진 해안 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "연곡 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "NOT_APPLICABLE",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "사천항 주변",
+                  "latitude": 37.838882,
+                  "longitude": 128.873894,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.853138+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 16.1
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "영진 해안 주변",
+                  "latitude": 37.866771,
+                  "longitude": 128.843849,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.853138+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 28.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "연곡 주변",
+                  "latitude": 37.861414,
+                  "longitude": 128.830783,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.853138+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 339.1
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 11.42,
+                  "durationSeconds": 748,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 4.8,
+                  "durationSeconds": 315,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 1.53,
+                  "durationSeconds": 100,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 15.12,
+                  "durationSeconds": 990,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 32.9,
+              "drivingSeconds": 2153,
+              "stopSeconds": 900,
+              "totalSeconds": 3053,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "daegwallyeong",
+            "name": "구름 가까이, 초록 능선",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요."
+            ],
+            "estimatedRoundTripKm": 42,
+            "estimatedMinutes": 62,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "옛길 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "대관령 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "횡계 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "NOT_APPLICABLE",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "옛길 주변",
+                  "latitude": 37.736165,
+                  "longitude": 128.768805,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.942267+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 392.4
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "대관령 주변",
+                  "latitude": 37.691393,
+                  "longitude": 128.753521,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.942267+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 183.3
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "횡계 주변",
+                  "latitude": 37.684686,
+                  "longitude": 128.705741,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.942267+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 147.6
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 11.32,
+                  "durationSeconds": 742,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 6.08,
+                  "durationSeconds": 399,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.04,
+                  "durationSeconds": 330,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 19.76,
+                  "durationSeconds": 1294,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 42.2,
+              "drivingSeconds": 2765,
+              "stopSeconds": 900,
+              "totalSeconds": 3665,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "gangneung-forest",
+            "name": "솔향 따라, 호수 한 바퀴",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요."
+            ],
+            "estimatedRoundTripKm": 17,
+            "estimatedMinutes": 33,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "경포호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "초당 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "강문 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "NOT_APPLICABLE",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "경포호 주변",
+                  "latitude": 37.795163,
+                  "longitude": 128.897005,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 89.5
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "초당 주변",
+                  "latitude": 37.786991,
+                  "longitude": 128.913974,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.5
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "강문 주변",
+                  "latitude": 37.794738,
+                  "longitude": 128.918947,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 367.9
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.7519,
+                  "longitude": 128.8761,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 6.08,
+                  "durationSeconds": 398,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 2.06,
+                  "durationSeconds": 135,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 1.14,
+                  "durationSeconds": 75,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 7.17,
+                  "durationSeconds": 469,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 16.5,
+              "drivingSeconds": 1077,
+              "stopSeconds": 900,
+              "totalSeconds": 1977,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 0,
+        "timeExcluded": 6,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "hot-sunset",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 500,
+        "scenery": "coast",
+        "vehicleType": "ev",
+        "batteryPercent": 10,
+        "estimatedRangeKm": 400,
+        "departure": "sunset",
+        "weather": {
+          "condition": "sunny",
+          "temperatureC": 30,
+          "windMps": 2,
+          "severe": false,
+          "source": "contract fixture",
+          "observedAt": "2026-11-12T00:00:00Z"
+        }
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "gapyeong",
+            "name": "초록을 깊게 들이쉬다",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 120,
+            "estimatedMinutes": 176,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "청평 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "호명산 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "청평호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평 주변",
+                  "latitude": 37.736982,
+                  "longitude": 127.425007,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.1
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "호명산 주변",
+                  "latitude": 37.739944,
+                  "longitude": 127.493699,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 229.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평호 주변",
+                  "latitude": 37.701918,
+                  "longitude": 127.48724,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 109.7
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 51.54,
+                  "durationSeconds": 3374,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 7.14,
+                  "durationSeconds": 468,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.03,
+                  "durationSeconds": 330,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 55.82,
+                  "durationSeconds": 3654,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 119.5,
+              "drivingSeconds": 7826,
+              "stopSeconds": 2700,
+              "totalSeconds": 10526,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "yangpyeong",
+            "name": "강과 숲 사이",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 101,
+            "estimatedMinutes": 146,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "양수리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서종 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서후리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "양수리 주변",
+                  "latitude": 37.542856,
+                  "longitude": 127.32184,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.3
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서종 주변",
+                  "latitude": 37.606009,
+                  "longitude": 127.349004,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 1.1
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서후리 주변",
+                  "latitude": 37.614538,
+                  "longitude": 127.432295,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 259.6
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 35.9,
+                  "durationSeconds": 2350,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 8.75,
+                  "durationSeconds": 574,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 8.73,
+                  "durationSeconds": 572,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 47.65,
+                  "durationSeconds": 3120,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 101,
+              "drivingSeconds": 6616,
+              "stopSeconds": 2100,
+              "totalSeconds": 8716,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "gangneung-forest",
+            "name": "솔향 따라, 호수 한 바퀴",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 409,
+            "estimatedMinutes": 486,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "경포호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "초당 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "강문 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "경포호 주변",
+                  "latitude": 37.795163,
+                  "longitude": 128.897005,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 89.5
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "초당 주변",
+                  "latitude": 37.786991,
+                  "longitude": 128.913974,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.5
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "강문 주변",
+                  "latitude": 37.794738,
+                  "longitude": 128.918947,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 367.9
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 201.52,
+                  "durationSeconds": 13191,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 2.06,
+                  "durationSeconds": 135,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 1.14,
+                  "durationSeconds": 75,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 203.76,
+                  "durationSeconds": 13338,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 408.5,
+              "drivingSeconds": 26739,
+              "stopSeconds": 2400,
+              "totalSeconds": 29139,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 0,
+        "timeExcluded": 3,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "severe",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 180,
+        "scenery": "forest",
+        "vehicleType": "ev",
+        "originSevere": true
+      },
+      "status": 200,
+      "response": {
+        "courses": [],
+        "weatherExcluded": 10,
+        "timeExcluded": 0,
+        "routingFailed": 0,
+        "guidance": "조건에 맞는 코스가 없습니다. 이용 시간을 늘리거나 날씨 조건을 확인하세요."
+      }
+    },
+    {
+      "name": "short",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 1,
+        "scenery": "forest",
+        "vehicleType": "ev"
+      },
+      "status": 200,
+      "response": {
+        "courses": [],
+        "weatherExcluded": 0,
+        "timeExcluded": 10,
+        "routingFailed": 0,
+        "guidance": "조건에 맞는 코스가 없습니다. 이용 시간을 늘리거나 날씨 조건을 확인하세요."
+      }
+    },
+    {
+      "name": "return",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 1440,
+        "scenery": "forest",
+        "vehicleType": "ev",
+        "returnLatitude": 35.1796,
+        "returnLongitude": 129.0756,
+        "walking": false
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "yangpyeong",
+            "name": "강과 숲 사이",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 417,
+            "estimatedMinutes": 470,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "양수리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서종 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "서후리 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "양수리 주변",
+                  "latitude": 37.542856,
+                  "longitude": 127.32184,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.3
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서종 주변",
+                  "latitude": 37.606009,
+                  "longitude": 127.349004,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 1.1
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "서후리 주변",
+                  "latitude": 37.614538,
+                  "longitude": 127.432295,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.417424+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 259.6
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 35.9,
+                  "durationSeconds": 2350,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 8.75,
+                  "durationSeconds": 574,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 8.73,
+                  "durationSeconds": 572,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 363.57,
+                  "durationSeconds": 23798,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 417,
+              "drivingSeconds": 27294,
+              "stopSeconds": 900,
+              "totalSeconds": 28194,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "gapyeong",
+            "name": "초록을 깊게 들이쉬다",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 435,
+            "estimatedMinutes": 490,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "청평 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "호명산 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "청평호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평 주변",
+                  "latitude": 37.736982,
+                  "longitude": 127.425007,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.1
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "호명산 주변",
+                  "latitude": 37.739944,
+                  "longitude": 127.493699,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 229.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평호 주변",
+                  "latitude": 37.701918,
+                  "longitude": 127.48724,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 109.7
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 51.54,
+                  "durationSeconds": 3374,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 7.14,
+                  "durationSeconds": 468,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.03,
+                  "durationSeconds": 330,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 370.98,
+                  "durationSeconds": 24283,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 434.7,
+              "drivingSeconds": 28455,
+              "stopSeconds": 900,
+              "totalSeconds": 29355,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "busan-forest",
+            "name": "도시 밖, 숲의 온도",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 413,
+            "estimatedMinutes": 466,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "양산 숲길",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "내원사 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "하북 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "없음: 예시 날씨",
+              "weatherObservedAt": null
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "양산 숲길",
+                  "latitude": 35.36484,
+                  "longitude": 129.037868,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 21.4
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "내원사 주변",
+                  "latitude": 35.424858,
+                  "longitude": 129.0806,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 243.8
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "하북 주변",
+                  "latitude": 35.464055,
+                  "longitude": 129.087415,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:23.236764+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 53.4
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 35.1796,
+                  "longitude": 129.0756,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 361.5,
+                  "durationSeconds": 23662,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 9.11,
+                  "durationSeconds": 596,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.19,
+                  "durationSeconds": 340,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 37.34,
+                  "durationSeconds": 2445,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 413.1,
+              "drivingSeconds": 27043,
+              "stopSeconds": 900,
+              "totalSeconds": 27943,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 0,
+        "timeExcluded": 0,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "course-weather",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 37.5665,
+        "longitude": 126.978,
+        "availableMinutes": 500,
+        "scenery": "forest",
+        "vehicleType": "ev",
+        "weather": {
+          "condition": "sunny",
+          "temperatureC": 30,
+          "windMps": 2,
+          "severe": false,
+          "source": "contract fixture",
+          "observedAt": "2026-11-12T00:00:00Z"
+        },
+        "courseWeather": {
+          "yangpyeong": {
+            "condition": "sunny",
+            "temperatureC": 30,
+            "windMps": 2,
+            "severe": true,
+            "source": "contract fixture",
+            "observedAt": "2026-11-12T00:00:00Z"
+          },
+          "paju": {
+            "condition": "rainy",
+            "temperatureC": 30,
+            "windMps": 2,
+            "severe": false,
+            "source": "contract fixture",
+            "observedAt": "2026-11-12T00:00:00Z"
+          }
+        }
+      },
+      "status": 200,
+      "response": {
+        "courses": [
+          {
+            "id": "gapyeong",
+            "name": "초록을 깊게 들이쉬다",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 120,
+            "estimatedMinutes": 176,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "청평 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "호명산 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "청평호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평 주변",
+                  "latitude": 37.736982,
+                  "longitude": 127.425007,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.1
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "호명산 주변",
+                  "latitude": 37.739944,
+                  "longitude": 127.493699,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 229.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "청평호 주변",
+                  "latitude": 37.701918,
+                  "longitude": 127.48724,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.697678+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 109.7
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 51.54,
+                  "durationSeconds": 3374,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 7.14,
+                  "durationSeconds": 468,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 5.03,
+                  "durationSeconds": 330,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 55.82,
+                  "durationSeconds": 3654,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 119.5,
+              "drivingSeconds": 7826,
+              "stopSeconds": 2700,
+              "totalSeconds": 10526,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "gangneung-forest",
+            "name": "솔향 따라, 호수 한 바퀴",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "선택한 풍경 취향을 반영했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 409,
+            "estimatedMinutes": 486,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "경포호 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "초당 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "강문 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "경포호 주변",
+                  "latitude": 37.795163,
+                  "longitude": 128.897005,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 89.5
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "초당 주변",
+                  "latitude": 37.786991,
+                  "longitude": 128.913974,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 2.5
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "강문 주변",
+                  "latitude": 37.794738,
+                  "longitude": 128.918947,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.896455+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 367.9
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 201.52,
+                  "durationSeconds": 13191,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 2.06,
+                  "durationSeconds": 135,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 1.14,
+                  "durationSeconds": 75,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 203.76,
+                  "durationSeconds": 13338,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 408.5,
+              "drivingSeconds": 26739,
+              "stopSeconds": 2400,
+              "totalSeconds": 29139,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          },
+          {
+            "id": "paju",
+            "name": "들판 끝, 작은 마을",
+            "reasons": [
+              "출발지와 왕복 가능 시간을 기준으로 추정했어요.",
+              "제공된 날씨 조건을 반영했어요.",
+              "실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요."
+            ],
+            "estimatedRoundTripKm": 99,
+            "estimatedMinutes": 138,
+            "waypoints": [
+              {
+                "name": "출발지",
+                "description": "NOT_VERIFIED"
+              },
+              {
+                "name": "문산 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "임진각 주변",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "파주 들판",
+                "description": "HISTORICAL_SNAP_ACCESS_UNVERIFIED"
+              },
+              {
+                "name": "복귀 지점",
+                "description": "NOT_VERIFIED"
+              }
+            ],
+            "distanceTimeStatus": "ESTIMATED_NOT_ROAD_ROUTED",
+            "batteryStatus": "ROAD_ROUTE_REQUIRED",
+            "dataSource": {
+              "course": "내장 예시 코스 10개",
+              "distanceTime": "각 구간 직선거리 × 1.18 및 평균 55km/h 추정",
+              "weather": "contract fixture",
+              "weatherObservedAt": "2026-11-12T00:00:00Z"
+            },
+            "route": {
+              "points": [
+                {
+                  "order": 0,
+                  "type": "ORIGIN",
+                  "name": "출발지",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                },
+                {
+                  "order": 1,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "문산 주변",
+                  "latitude": 37.857029,
+                  "longitude": 126.785139,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.566484+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 12.6
+                },
+                {
+                  "order": 2,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "임진각 주변",
+                  "latitude": 37.88889,
+                  "longitude": 126.740217,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.566484+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 22.7
+                },
+                {
+                  "order": 3,
+                  "type": "SCENIC_WAYPOINT",
+                  "name": "파주 들판",
+                  "latitude": 37.872924,
+                  "longitude": 126.773253,
+                  "source": "OSRM/OSM 스냅 (2026-10-28T22:56:22.566484+00:00)",
+                  "verification": "HISTORICAL_SNAP_ACCESS_UNVERIFIED",
+                  "originalSnapDistanceMeters": 23.8
+                },
+                {
+                  "order": 4,
+                  "type": "RETURN",
+                  "name": "복귀 지점",
+                  "latitude": 37.5665,
+                  "longitude": 126.978,
+                  "source": "USER_INPUT",
+                  "verification": "NOT_VERIFIED",
+                  "originalSnapDistanceMeters": null
+                }
+              ],
+              "legs": [
+                {
+                  "fromOrder": 0,
+                  "toOrder": 1,
+                  "distanceKm": 43.06,
+                  "durationSeconds": 2819,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 1,
+                  "toOrder": 2,
+                  "distanceKm": 6.25,
+                  "durationSeconds": 410,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 2,
+                  "toOrder": 3,
+                  "distanceKm": 4.01,
+                  "durationSeconds": 263,
+                  "geometry": null
+                },
+                {
+                  "fromOrder": 3,
+                  "toOrder": 4,
+                  "distanceKm": 45.48,
+                  "durationSeconds": 2977,
+                  "geometry": null
+                }
+              ],
+              "distanceKm": 98.8,
+              "drivingSeconds": 6469,
+              "stopSeconds": 1800,
+              "totalSeconds": 8269,
+              "status": "ESTIMATED_NOT_ROAD_ROUTED",
+              "provider": "mock-straight-line",
+              "geometryStatus": "NOT_AVAILABLE",
+              "terrainStatus": "HIGHLIGHT_ONLY",
+              "warnings": [
+                "경유지와 출발·복귀 지점의 현재 진입 가능 여부는 확인되지 않았습니다."
+              ]
+            }
+          }
+        ],
+        "weatherExcluded": 1,
+        "timeExcluded": 3,
+        "routingFailed": 0,
+        "guidance": "차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다."
+      }
+    },
+    {
+      "name": "invalid",
+      "path": "/api/recommendations",
+      "body": {},
+      "status": 400,
+      "response": {
+        "error": "Invalid recommendation request"
+      }
+    },
+    {
+      "name": "invalid-coordinate",
+      "path": "/api/recommendations",
+      "body": {
+        "latitude": 91,
+        "longitude": 126.978,
+        "availableMinutes": 180,
+        "scenery": "forest",
+        "vehicleType": "ev"
+      },
+      "status": 400,
+      "response": {
+        "error": "Invalid recommendation request"
+      }
+    },
+    {
+      "name": "charging-required",
+      "path": "/api/charging/recommendations",
+      "body": {},
+      "status": 200,
+      "response": {
+        "status": "ROAD_ROUTE_REQUIRED",
+        "stations": [],
+        "note": "실제 도로 경로가 필요합니다."
+      }
+    },
+    {
+      "name": "charging-mock",
+      "path": "/api/charging/recommendations",
+      "body": {
+        "routeStatus": "ROAD_ROUTED",
+        "geometry": [
+          {
+            "latitude": 37.56,
+            "longitude": 127
+          },
+          {
+            "latitude": 37.57,
+            "longitude": 127
+          }
+        ]
+      },
+      "status": 200,
+      "response": {
+        "status": "MOCK_ONLY",
+        "stations": [
+          {
+            "name": "모의 충전소 A",
+            "source": "MOCK_FICTITIOUS",
+            "connector": "미확인",
+            "output": "미확인",
+            "availability": "미확인",
+            "compatibility": "미확인",
+            "detour": "미확인",
+            "straightLineProximity": "경로 좌표와 직선거리 약 0km (이탈거리 아님)"
+          }
+        ],
+        "note": "실존 충전소가 아닌 테스트 데이터입니다. 실제 운행에 사용할 수 없습니다."
+      }
+    },
+    {
+      "name": "address-unconfigured",
+      "path": "/api/location/address",
+      "body": {
+        "latitude": 37.5,
+        "longitude": 127
+      },
+      "status": 503,
+      "response": ""
+    },
+    {
+      "name": "address-invalid",
+      "path": "/api/location/address",
+      "body": {
+        "latitude": 91,
+        "longitude": 127
+      },
+      "status": 400,
+      "response": ""
+    },
+    {
+      "name": "resolve-invalid",
+      "path": "/api/navigation/resolve",
+      "body": {
+        "ticket": "invalid"
+      },
+      "status": 400,
+      "response": ""
+    },
+    {
+      "name": "tesla-status",
+      "path": "/api/tesla/status",
+      "status": 200,
+      "response": {
+        "message": "전체 경유지 일괄 전송은 미지원입니다. 단일 목적지 교체만 지원합니다.",
+        "secure": false,
+        "locationReady": false,
+        "connection": "NOT_CONNECTED",
+        "navigation": "NOT_CONFIGURED"
+      }
+    },
+    {
+      "name": "tesla-authorize",
+      "path": "/api/tesla/authorize",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-disconnect",
+      "path": "/api/tesla/disconnect",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-vehicles",
+      "path": "/api/tesla/vehicles",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-select",
+      "path": "/api/tesla/select",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-reading",
+      "path": "/api/tesla/reading",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-location",
+      "path": "/api/tesla/location",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-navigation/preview",
+      "path": "/api/tesla/navigation/preview",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-navigation/destination/preview",
+      "path": "/api/tesla/navigation/destination/preview",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-navigation/send",
+      "path": "/api/tesla/navigation/send",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-navigation/confirm",
+      "path": "/api/tesla/navigation/confirm",
+      "body": {},
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    },
+    {
+      "name": "tesla-callback",
+      "path": "/api/tesla/callback?state=invalid&code=invalid",
+      "status": 403,
+      "response": {
+        "error": "HTTPS_REQUIRED"
+      }
+    }
+  ]
+}

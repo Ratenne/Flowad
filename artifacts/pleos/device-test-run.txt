@@ -1,0 +1,8 @@
+
+kr.gyeollon.pleos.NavigationDeviceTest:.
+
+Time: 33.007
+
+OK (1 test)
+
+

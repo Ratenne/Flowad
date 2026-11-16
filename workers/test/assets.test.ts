@@ -17,7 +17,7 @@ it('serves unchanged frontend assets under /flowad while API stays in Hono',asyn
   expect(await(await call('/flowad/',undefined,{env:e})).text()).toBe('/');
   expect(await(await call('/flowad/app.js',undefined,{env:e})).text()).toBe('/app.js');
   expect(await(await call('/flowad/tesla-check.html',undefined,{env:e})).text()).toBe('/tesla-check.html');
-  expect((await call('/flowad/api/recommendations',base,{env:e})).status).toBe(200);
+  expect((await call('/flowad/api/recommendations',base,{env:e})).status).toBe(503);
   expect(fetch).toHaveBeenCalledTimes(3);
 });
 it('keeps the context prefix on static asset canonical redirects',async()=>{

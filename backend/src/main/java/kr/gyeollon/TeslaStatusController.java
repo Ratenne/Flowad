@@ -11,6 +11,7 @@ import java.util.*;
 
 @RestController @RequestMapping("/api/tesla")
 public class TeslaStatusController {
+ @org.springframework.beans.factory.annotation.Autowired(required=false) private DynamicApiProxy dynamic;
  private static final String SESSION="tesla", CSRF="tesla_csrf";
  private final Routing routing; private final boolean commandConfigured; private final TeslaIntegration integration; private final SecureRandom random=new SecureRandom();
  @org.springframework.beans.factory.annotation.Autowired
@@ -30,7 +31,7 @@ public class TeslaStatusController {
  @PostMapping("/reading") public ResponseEntity<?> reading(HttpServletRequest req)throws TeslaIntegration.Failure{verify(req);return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(integration.reading(session(req.getSession())));}
  @PostMapping("/location") public ResponseEntity<?> location(HttpServletRequest req)throws TeslaIntegration.Failure{verify(req);return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(integration.location(session(req.getSession())));}
 
- record PreviewRequest(String courseId,Double latitude,Double longitude){}
+ record PreviewRequest(String courseId,Double latitude,Double longitude,String ticket,String vehicleType,Double batteryPercent,Double estimatedRangeKm,Boolean walking,Integer availableMinutes){PreviewRequest(String courseId,Double latitude,Double longitude){this(courseId,latitude,longitude,null,null,null,null,null,null);}}
  record SendRequest(String planId,int order,boolean replaceDestination){}
  record ConfirmRequest(String planId,int order,boolean matched){}
  enum CommandStatus { NOT_SENT, SENDING, API_ACCEPTED, API_FAILED }
@@ -51,8 +52,20 @@ public class TeslaStatusController {
   verify(req);
   var pending=pendingPreview(req);
   if(pending!=null)return pending;
-  validateCoordinates(input.latitude(),input.longitude());
   String vehicle=integration.selected(session(req.getSession()));
+  if(input.ticket()!=null){
+   if(dynamic==null)throw new TeslaIntegration.Failure("ROAD_ROUTE_REQUIRED");
+   var conditions=new ObjectMapper().createObjectNode().put("ticket",input.ticket()).put("vehicleType",input.vehicleType()==null?"ev":input.vehicleType());
+   if(input.batteryPercent()!=null)conditions.put("batteryPercent",input.batteryPercent());if(input.estimatedRangeKm()!=null)conditions.put("estimatedRangeKm",input.estimatedRangeKm());if(input.walking()!=null)conditions.put("walking",input.walking());if(input.availableMinutes()!=null)conditions.put("availableMinutes",input.availableMinutes());
+   var verified=dynamic.post("/api/navigation/verify",conditions);
+   if(!verified.getStatusCode().is2xxSuccessful())return verified;
+   var body=(com.fasterxml.jackson.databind.JsonNode)verified.getBody();
+   if(body==null||!body.path("roadVerified").asBoolean())throw new TeslaIntegration.Failure("ROAD_ROUTE_REQUIRED");
+   Routing.Route route=new ObjectMapper().treeToValue(body.path("route"),Routing.Route.class);
+   if(!"ROAD_ROUTED".equals(route.status()))throw new TeslaIntegration.Failure("ROAD_ROUTE_REQUIRED");
+   return savePreview(req,vehicle,route,new TeslaNavigationAdapter().prepare(route).stops());
+  }
+  validateCoordinates(input.latitude(),input.longitude());
   Routing.Route route=routing.create(input.courseId(),input.latitude(),input.longitude(),input.latitude(),input.longitude(),0);
   if(!"ROAD_ROUTED".equals(route.status()))throw new TeslaIntegration.Failure("ROAD_ROUTE_REQUIRED");
   return savePreview(req,vehicle,route,new TeslaNavigationAdapter().prepare(route).stops());

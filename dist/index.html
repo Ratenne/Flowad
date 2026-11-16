@@ -117,20 +117,19 @@
             <p class="overline" id="panelEyebrow">A LITTLE DETOUR</p>
             <h1 id="resultsTitle">지금 여기서,<br> 좋은 길로.</h1>
           </div>
-          <button id="locateBtn" aria-label="브라우저 GPS 위치 새로 확인" style="display: none;"><svg>
+          <button id="locateBtn" aria-label="브라우저 GPS 위치 새로 확인"><svg>
               <use href="#i-location" />
             </svg></button>
         </div>
         <p class="panel-sub" id="resultsSubtitle">목적지는 비워두세요.<br>오늘 어울리는 길을 찾아드릴게요.</p>
-        <label class="origin-environment">사용 환경
-          <select id="locationEnvironment" aria-label="사용 환경과 기본 위치 출처">
-            <option value="device">PC·모바일 — 이 기기 위치</option>
-            <option value="tesla">Tesla 차량 — 차량 위치</option>
+        <label id="locationEnvironmentControl" class="origin-environment">조회할 위치
+          <select id="locationEnvironment" aria-label="조회할 위치 선택">
+            <option value="device">현재 접속한 기기 위치</option>
+            <option value="vehicle">차량 위치</option>
           </select>
         </label>
         <p class="location-source-note" id="locationSourceNote">이 기기의 브라우저 위치를 사용합니다. 차량과 같은 곳일 수도 있습니다.</p>
-        <p class="location-summary" id="mainLocationStatus" role="status" aria-live="polite">브라우저 위치 또는 설정 → 차량의 Tesla
-          차량 위치를 출발지로 사용할 수 있어요.</p>
+        <p class="location-summary" id="mainLocationStatus" role="status" aria-live="polite">현재 접속한 기기를 기준으로 위치를 조회합니다.</p>
         <button id="cancelBrowserLocation" type="button" class="button-secondary" hidden>위치 측정 취소</button>
         <p class="result-status" id="resultStatus" role="status" aria-live="polite"></p>
         <div class="quick-controls">
@@ -376,7 +375,7 @@
       <p id="locationRecovery" role="status"></p><button id="retryLocation" type="button" class="button-secondary">이 기기
         위치 다시 측정</button>
       <button id="useApproximateLocation" type="button" class="button-secondary" hidden>대략적인 기기 위치로 추천</button>
-      <button id="recoveryTeslaLocation" type="button" class="button-secondary">Tesla 차량 위치로 조회</button>
+      <button id="recoveryTeslaLocation" type="button" class="button-secondary">차량 위치 조회</button>
       <p class="settings-note">기기 위치와 차량 위치는 같을 수도, 다를 수도 있습니다. 선택한 위치 출처를 출발지로 사용합니다.</p>
       <label for="citySearch">출발 지역 검색</label><input id="citySearch" type="search" placeholder="서울, 강릉, 부산…"
         autocomplete="off">

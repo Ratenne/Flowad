@@ -7,6 +7,7 @@ import {createInterface} from 'node:readline';
 import {resolve,join} from 'node:path';
 import {getPlatformProxy} from 'wrangler';
 import {cf,accountId} from './cloudflare-client.mjs';
+import {preserveRollback} from './poi-rollback.mjs';
 const args=process.argv.slice(2),remote=args.includes('--remote'),database=args.find(a=>a.startsWith('--database='))?.split('=')[1];
 if(remote&&!/^[a-f0-9-]{36}$/.test(database??''))throw Error('Explicit remote database UUID required');
 const directory=resolve('../dist/data'),manifest=JSON.parse(await readFile(join(directory,'poi-manifest.json'),'utf8'));
@@ -67,7 +68,7 @@ try{
  const count=await sql(`SELECT sum(json_array_length(records_json)) total FROM poi_cells WHERE dataset_id IN (${ids})`,manifest.datasets);
  if(Number(count[0].total)!==manifest.total)throw Error('D1 record count mismatch; not activated');
  const before=await sql('SELECT * FROM poi_provider_state');
- await writeFile(statePath+'.rollback.sql',before.map(r=>`INSERT OR REPLACE INTO poi_provider_state VALUES('${r.provider}','${r.active_dataset}');`).join('\n'));
+ await preserveRollback(statePath+'.rollback.sql',before,manifest.metadata);
  for(const meta of manifest.metadata)await sql('INSERT OR REPLACE INTO poi_provider_state VALUES(?,?)',[meta.provider,meta.id]);
  console.log(JSON.stringify({activated:manifest.datasets,records:processed,cells,rowsWritten:state.rowsWritten,remote}));
 }finally{await platform?.dispose();}

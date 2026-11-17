@@ -1,11 +1,12 @@
 import assert from 'node:assert/strict';
-import {courseFromApi,bookmarkTemplate,restoreBookmarks} from '../dist/dynamic-courses.js';
+import {courseFromApi,bookmarkTemplate,restoreBookmarks,arrivalTimes} from '../dist/dynamic-courses.js';
 import {routeWindow,dynamicTerrain} from '../dist/dynamic-terrain.js';
 import {makeTerrainModel,makeLatestTerrainLoader} from '../dist/terrain-model.js';
 const item={id:'dyn-new-id-never-in-catalog',name:'새 전국 명소',scenery:'forest',region:'테스트 지역',latitude:37.5,longitude:127,
  estimatedRoundTripKm:100,estimatedMinutes:180,stopMinutes:20,reasons:['테스트'],waypoints:[{id:'osm:node:1',name:'공개 명소',latitude:37.5,longitude:127}],
  navigationTicket:'must-not-persist',route:{status:'ROAD_ROUTED',generatedAt:'2026-11-16T00:00:00Z',points:[{name:'개인 출발지',latitude:37.6,longitude:127,type:'ORIGIN'},{name:'공개 명소',latitude:37.5,longitude:127,type:'SCENIC_WAYPOINT'},{name:'복귀',latitude:37.6,longitude:127,type:'RETURN'}],legs:[{geometry:[{latitude:37.6,longitude:127},{latitude:37.5,longitude:127},{latitude:37.6,longitude:127}]}]}};
 const course=courseFromApi(item);assert.equal(course.name,item.name);assert.equal(course.km,100);
+assert.deepEqual(arrivalTimes({...course,route:{...course.route,stopSeconds:1200,legs:[{durationSeconds:600},{durationSeconds:1200}]}},0),[0,600000,3000000]);
 assert.throws(()=>courseFromApi({...item,id:'\" onclick=alert(1)'}));
 const template=bookmarkTemplate(course),serialized=JSON.stringify(template);
 assert.ok(!serialized.includes('must-not-persist'));assert.ok(!serialized.includes('37.6'));assert.ok(!serialized.includes('個人'));assert.equal(template.waypoints.length,1);

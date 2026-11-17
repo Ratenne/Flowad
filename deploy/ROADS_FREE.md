@@ -13,7 +13,7 @@
 
 Render 빌드 환경에서 실제 전처리는 약 194초 걸렸다. extract의 프로세스 최대 메모리는 3,155,767,296 bytes, customize는 1,456,353,280 bytes였다. 이 값은 빌드 메모리이며 512MB 실행 성공을 의미하지 않는다. 로컬 arm64 실행 검증에서는 512MB/0.1CPU/스왑 없음 조건으로 서울·부산·제주·서울→부산·왕복 5개 도로 요청과 좌표/경유지 제한 오류 2개를 통과했다. 장거리 요청 8개(동시 4개) 후 cgroup memory.peak=301,944,832 bytes(약 288MiB), oom=0, oom_kill=0였다. 이는 로컬 측정이며 Render 실측과 구분한다.
 
-Render 실제 검증: 서울 9.93km, 부산 8.63km, 제주 49.50km, 서울→부산 392.63km, 왕복 20.95km(2구간) 응답을 확인했다. 첫 서울 요청은 10.712초(기동 대기 포함), 이후 0.482–1.299초였다. 잘못된 위도와 경유지 21개 요청은 HTTP 400으로 거부됐다. 원본 요약: artifacts/roads/render-probe.json. Render UI에서 Free 및 Your service is live를 확인했다.
+Render 실제 검증: 서울 9.93km, 부산 8.63km, 제주 49.50km, 서울→부산 392.63km, 왕복 20.95km(2구간) 응답을 확인했다. 첫 서울 요청은 10.712초(기동 대기 포함), 이후 0.482–1.299초였다. 잘못된 위도와 경유지 21개 요청은 HTTP 400으로 거부됐다. 원본 요약 `artifacts/roads/render-probe.json`은 로컬 실행 산출물로 Git에서 제외한다. Render UI에서 Free 및 Your service is live를 확인했다.
 
 로컬 재현: `sh scripts/validate-roads-free.sh`. 지도를 $HOME/Library/Flowad/maps에 보관하고, 빌드는 10GB/4CPU 한도, 실행 테스트는 512MB/0.1CPU·swap 없음으로 수행한다. 결과를 확인한 후 테스트 컨테이너는 중지한다. Docker 또는 Colima가 필요하다.
 

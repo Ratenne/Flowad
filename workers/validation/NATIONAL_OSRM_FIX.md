@@ -40,7 +40,7 @@
 
 의도적인 부정 대조군 실패 후에도 Worker NoSegment 로그와 Docker 로그/통계를 확보했다(당시 약 275MiB, CPU 0%, OOM false). Wrangler 프로세스 그룹, 테스트/전처리 컨테이너 제거를 확인했고, 검증을 위해 켠 Colima도 종료했다. macOS의 기존 Control Center가 사용하는 5000 포트는 종료 대상이 아니다.
 
-측정 요약은 `national-osrm-local.json`, 상세 로컬 로그는 저장소의 무시된 `data/generated/osrm-validation/`에 보관한다. 운영 Cloudflare/D1, Tesla 계정·차량 명령은 사용하지 않았다. 원격 GitHub Actions Ubuntu 실행은 아직 하지 않았으며, 로컬 6개 대표 출발점 통과가 모든 POI의 자동차 접근·실시간 통행 가능성을 보장하지는 않는다.
+측정 요약 `national-osrm-local.json`과 상세 로컬 로그 `data/generated/osrm-validation/`는 Git에서 제외하는 로컬 검증 산출물이다. 운영 Cloudflare/D1, Tesla 계정·차량 명령은 사용하지 않았다. 이 기록 작성 당시 원격 GitHub Actions Ubuntu 실행은 아직 하지 않았으며, 로컬 6개 대표 출발점 통과가 모든 POI의 자동차 접근·실시간 통행 가능성을 보장하지는 않는다.
 
 ## Pleos 통합 브랜치 병합 후 재검증
 

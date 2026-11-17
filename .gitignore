@@ -1,12 +1,56 @@
 # Python
 .venv-poi/
+.venv/
+.venv-*/
+venv/
 data/generated/
 data/raw/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Dependencies, SDK caches and generated builds in every subproject
+node_modules/
+.wrangler/
+.gradle/
+.cache/
+build/
+target/
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Local validation output (keep source, fixtures and Markdown reports tracked)
+/artifacts/
+/validation/*.json
+/workers/validation/*.json
+/workers/evidence/
+*.har
+*.cpuprofile
+*.heapsnapshot
+*.hprof
+*.jfr
 
 # Local address data
 *.osm.pbf
+*.osrm
+*.osrm.*
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db
+*.db-wal
+*.db-shm
 addresses.sqlite*
 
 # Java / Maven
@@ -20,6 +64,7 @@ backend/target/
 pleos-android/.gradle/
 pleos-android/**/build/
 pleos-android/local.properties
+local.properties
 *.apk
 *.aab
 
@@ -27,6 +72,9 @@ pleos-android/local.properties
 .env
 .env.*
 !.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
 *.pem
 *.key
 *.p12
@@ -41,8 +89,12 @@ secrets*.json
 .vscode/
 *.iml
 *.log
+*.log.*
 .openai/
 .DS_Store
 Thumbs.db
 
 !pleos-android/gradle/wrapper/gradle-wrapper.jar
+
+# dist/ contains tracked application source, public POIs and runtime terrain.
+# Keep dist/, package-lock.json, tesla-partner-public-key.txt and examples in Git.

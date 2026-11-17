@@ -11,7 +11,7 @@
 - 운영 URL: https://ravirgo.com/flowad/
 - Route `ravirgo.com/flowad*`: `flowad-path-proxy` → `flowad-api-stage2`, Cloudflare readback 확인. 다른 Route/DNS/Pages 및 기존 Render 서비스는 변경하지 않았다.
 - 원격 D1과 기존 Secrets를 유지했다. 운영 frontend/origin/callback은 ravirgo.com으로 설정했다. Batch Adapter URL은 운영 binding에 없다.
-- 운영 HTTP 기능 검사13건: 기본 추천200/3개, 기상 제외10개, 잘못된 입력400, 기존 추정 티켓 resolve200, 변조 티켓 거절400, 양평 추천/실제 검증200/ROAD_ROUTE_VERIFIED/검증 티켓 resolve200, 파주 추천200/실제 NoSegment400, 도로 실패 후 기본 추천200, 익명 D1 session200, 웹200. 응답 상세는 `validation/final-production.json`에 민감 정보 없이 기록했다. 시간은 클라이언트 wall time이며 CPU가 아니다.
+- 운영 HTTP 기능 검사13건: 기본 추천200/3개, 기상 제외10개, 잘못된 입력400, 기존 추정 티켓 resolve200, 변조 티켓 거절400, 양평 추천/실제 검증200/ROAD_ROUTE_VERIFIED/검증 티켓 resolve200, 파주 추천200/실제 NoSegment400, 도로 실패 후 기본 추천200, 익명 D1 session200, 웹200. 응답 상세는 로컬 검증 산출물 `validation/final-production.json`에 기록했으며 Git에서 제외한다. 시간은 클라이언트 wall time이며 CPU가 아니다.
 - 추가 검사: 충전소 API200/ROAD_ROUTE_REQUIRED(실제 충전소 검증 아님), app.js200, 같은 Origin OPTIONS204, Secure/HttpOnly/SameSite=Lax session cookie, CSRF를 포함한 익명 Tesla preview400/NOT_CONNECTED.
 - 루트 사이트200, 기존 Tesla 공개키 URL200 및 SPKI DER 일치. 공개키를 교체하지 않았다.
 - 운영 Chrome 화면에서 서울 체험 추천·기존3D 하이라이트·수동 서울 출발·양평 실제 도로 검증 성공을 확인했다. 예시 출발 체험만으로는 전송을 허용하지 않는 처리도 확인했다. 실제 위치 권한을 요청하지 않았다.

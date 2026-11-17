@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import {validCoordinates} from '../dist/location-service.js';
+import {courseFromApi} from '../dist/dynamic-courses.js';
 import './test-location-service.mjs';
 import './test-location-environment.mjs';
 
@@ -26,7 +27,7 @@ const context = vm.createContext({
   locationEnvironment:{vehicle:false,provider:'browser'},
   teslaLocationAbort: null, teslaCsrf:'test',
   recommendationRequest: 0, recommendationAbort: null, recommendations: [],
-  $: get, render() {}, syncSelection() {}, setDrivingPreview() {},
+  $: get, sceneAPI:null, render() {}, syncSelection() {}, setDrivingPreview() {},
   paintLocation(location) { get('#locationLabel').textContent=location.label; },
   publishLocationStatus(message) { get('#locationStatus').textContent=message; get('#mainLocationStatus').textContent=message; },
   setLocating(on) { context.state.locating = on; },
@@ -56,7 +57,7 @@ const context = vm.createContext({
   },
   teslaPost() { teslaLookups++; return new Promise((resolve,reject) => { finishTesla = resolve; failTesla=reject; }); },
   teslaError() {get('#teslaData').textContent='차량 위치 정보를 사용할 수 없습니다.';},
-  validCoordinates, AbortController, setTimeout, clearTimeout
+  validCoordinates, courseFromApi, crypto:globalThis.crypto, AbortController, setTimeout, clearTimeout
 });
 vm.runInContext(
   slice('function cancelLocationRequest()', 'function applyOriginWeather()') +
@@ -82,7 +83,7 @@ finishFix({...gps, lat: 36});
 await newerGps;
 const recent = vm.runInContext('updateResults()', context);
 const reply = km => ({ok:true, json:async () => ({
-  courses:[{id:'test', estimatedRoundTripKm:km, route:{points:[]}}]
+  courses:[{id:'test',name:'테스트 동적 코스',estimatedMinutes:45,estimatedRoundTripKm:km,route:{points:[{name:'출발지',latitude:37.5,longitude:127,type:'ORIGIN'},{name:'복귀지',latitude:37.5,longitude:127,type:'RETURN'}]}}]
 })});
 assert.deepEqual(pending.map(x=>x.body.latitude), [37.5, 36]);
 pending[1].resolve(reply(25));
@@ -164,6 +165,8 @@ assert.equal(context.state.location.quality,'APPROXIMATE');
 assert.equal(context.state.location.userConfirmed,true);
 assert.equal(addressEffects,0);
 assert.equal(weatherEffects,1);
+assert.equal(recommendationEffects,0,'Wait for the initial forecast instead of issuing a duplicate recommendation');
+context.updateResults();
 assert.equal(recommendationEffects,1);
 
 const manual=vm.runInContext('requestLocation()',context);
@@ -177,6 +180,7 @@ await manual;
 assert.equal(context.state.location,manualOrigin);
 assert.equal(manualOrigin.kind,'manual');
 assert.equal(manualOrigin.lat,35.1);
+context.updateResults();
 assert.equal(recommendationEffects,2);
 assert.equal(addressEffects,0);
 
@@ -187,6 +191,7 @@ assert.equal(context.state.location.kind,'gps');
 assert.equal(context.state.location.lat,gps.lat);
 assert.equal(addressEffects,1);
 assert.equal(weatherEffects,3);
+context.updateResults();
 assert.equal(recommendationEffects,3);
 assert.equal(statusLookups,0);
 assert.equal(teslaLookups,4);

@@ -9,19 +9,19 @@ export function point(order: number, type: string, name: string, latitude: numbe
   coordinate.parse({latitude,longitude});
   return { order, type, name, latitude, longitude, source: 'USER_INPUT', verification: 'NOT_VERIFIED', originalSnapDistanceMeters: null };
 }
-export async function road(points: Point[], env: Env, includeGeometry=env.FREE_PLAN_MODE!=='true'): Promise<Pick<Route,'legs'|'status'|'provider'|'geometryStatus'>> {
+export async function road(points: Point[], env: Env, includeGeometry=env.FREE_PLAN_MODE!=='true',signal?:AbortSignal): Promise<Pick<Route,'legs'|'status'|'provider'|'geometryStatus'>> {
   if (!env.ROAD_ROUTING_URL) {
     const legs = points.slice(1).map((b,i) => {const a=points[i], km=distance(a.latitude,a.longitude,b.latitude,b.longitude)*1.18;return {fromOrder:i,toOrder:i+1,distanceKm:round(km,2),durationSeconds:Math.ceil(km/55*3600),geometry:null};});
     return { legs, status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'mock-straight-line',geometryStatus:'NOT_AVAILABLE' };
   }
   const coords = points.map(p=>`${p.longitude},${p.latitude}`).join(';');
-  const response=await requestRoad(points,env,includeGeometry,coords);
+  const response=await requestRoad(points,env,includeGeometry,coords,signal);
   return roadResponse(points,response,includeGeometry);
 }
-async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords=points.map(p=>`${p.longitude},${p.latitude}`).join(';')){
+async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords=points.map(p=>`${p.longitude},${p.latitude}`).join(';'),signal?:AbortSignal){
   if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   let response;
-  try { response = await httpJson(`${httpsBase(env.ROAD_ROUTING_URL)}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{},8000); }
+  try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000); }
   catch { throw new Failure('PROVIDER_UNAVAILABLE'); }
   return response;
 }
@@ -78,6 +78,27 @@ export function finish(points: Point[], result: Awaited<ReturnType<typeof road>>
   if(drivingSeconds+stopSeconds>2147483647)throw new Failure('INVALID_PROVIDER_RESPONSE');
   if(result.geometryStatus==='NOT_REQUESTED_FREE_PLAN')warnings.push('무료 운영 모드에서는 전체 왕복 도로선을 요청하지 않습니다. 거리·시간은 실제 도로 제공자 응답입니다.');
   return {...result,points,distanceKm:round(result.legs.reduce((s,l)=>s+l.distanceKm,0),1),drivingSeconds,stopSeconds,totalSeconds:drivingSeconds+stopSeconds,terrainStatus,warnings,generatedAt:new Date().toISOString()};
+}
+// Dynamic recommendations use a provider-simplified overview to bound edge CPU,
+// while preserving all leg durations, distances and via-point order checks.
+export async function roadSimplified(points:Point[],env:Env,signal?:AbortSignal):Promise<Awaited<ReturnType<typeof road>>>{
+ if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
+ const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL);
+ const coords=points.map(p=>p.longitude+','+p.latitude).join(';');
+ const response=await httpJson(`${base}/route/v1/driving/${coords}?steps=false&geometries=geojson&overview=simplified&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000);
+ const summary=roadResponse(points,response,false);
+ const root=object(response.data),raw=object((root.routes as unknown[])[0]);
+ if(!raw.geometry)return roadResponse(points,response,true);
+ const geometry=object(raw.geometry);if(geometry.type!=='LineString'||!Array.isArray(geometry.coordinates)||geometry.coordinates.length<2||geometry.coordinates.length>12000)throw new Failure('INCOMPLETE_ROUTE');
+ const line=geometry.coordinates.map(v=>{const [longitude,latitude]=xy(v);return {latitude,longitude};});
+ let from=0;
+ const legs=summary.legs.map((leg,i)=>{
+  let to=line.length-1;
+  if(i<summary.legs.length-1){let best=Infinity;for(let at=from+1;at<line.length-1;at++){const d=distance(points[i+1].latitude,points[i+1].longitude,line[at].latitude,line[at].longitude);if(d<best){best=d;to=at;}}if(best>.15)throw new Failure('INCOMPLETE_ROUTE');}
+  if(to<=from||distance(line[from].latitude,line[from].longitude,points[i].latitude,points[i].longitude)>.15||distance(line[to].latitude,line[to].longitude,points[i+1].latitude,points[i+1].longitude)>.15)throw new Failure('INCOMPLETE_ROUTE');
+  const result={...leg,geometry:line.slice(from,to+1)};from=to;return result;
+ });
+ return {...summary,legs,geometryStatus:'PROVIDER_SIMPLIFIED'};
 }
 export async function destination(name: string, lat: number, lng: number, originLat: number, originLng: number, env: Env) {
   const points=[point(0,'ORIGIN','도로 검증 출발 기준점',originLat,originLng),point(1,'DESTINATION',name,lat,lng)],result=await road(points,env,true);

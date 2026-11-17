@@ -144,9 +144,10 @@
               <use href="#i-location" />
             </svg><span id="emptyLocateLabel">이 기기 위치에서 추천</span><svg class="arrow">
               <use href="#i-arrow" />
-            </svg></button><button id="demoBtn" class="button-secondary">체험 코스 보기<svg aria-hidden="true" class="arrow">
+            </svg></button><button id="demoBtn" class="button-secondary">출발 지역으로 찾기<svg aria-hidden="true" class="arrow">
               <use href="#i-arrow" />
-            </svg></button><small>체험은 서울 출발 · 예시 날씨</small></div>
+            </svg></button><small id="catalogStatus">전국 공개 명소를 출발지에서 도로로 연결합니다.</small></div>
+        <button id="compareRoutes" type="button" class="button-secondary" hidden disabled>선택 코스 비교</button>
         <div id="routeCards" class="route-cards" hidden></div>
         <div id="emptyState" class="empty-state" hidden><svg>
             <use href="#i-bookmark" />
@@ -156,9 +157,9 @@
         </div>
         <div id="noMatch" class="empty-state" hidden>
           <h2>조금 더 멀리 찾아볼까요?</h2>
-          <p>현재 위치와 조건에 맞는 예시 코스가 없어요.</p><button id="expandDuration" class="button-secondary">하루 코스로 넓히기</button>
+          <p>현재 위치와 조건에 맞는 도로 코스를 만들지 못했어요.</p><button id="expandDuration" class="button-secondary">하루 코스로 넓히기</button>
         </div>
-        <div class="panel-foot"><span id="dataSourceLabel">위치 대기 · 예시 코스 10개</span></div>
+        <div class="panel-foot"><span id="dataSourceLabel">위치 대기 · 전국 공개 명소 탐색</span></div>
       </section>
       <section class="map-area" aria-label="코스 입체 미리보기">
         <header class="map-header">
@@ -258,6 +259,7 @@
         <div id="moodChips" class="mood-options"><button data-mood="all" class="selected" aria-pressed="true">어디든
             좋아요</button><button data-mood="forest" aria-pressed="false">숲의 초록</button><button data-mood="coast"
             aria-pressed="false">바다의 여유</button><button data-mood="open" aria-pressed="false">탁 트인 풍경</button></div>
+        <label>코스 형태 <select id="tripMode"><option value="round">출발지로 돌아오는 왕복</option><option value="oneway">마지막 명소에서 마치는 편도</option></select></label>
         <label class="walk-setting"><input id="walking" type="checkbox" checked><span>잠깐 내려서 산책</span><span
             class="switch" aria-hidden="true"></span></label>
         <div class="location-setting"><span id="locationStatus" role="status">현재 위치를 확인해 주세요.</span><button
@@ -362,6 +364,7 @@
   <dialog id="detailDialog" class="detail-dialog">
     <div id="detailContent"></div>
   </dialog>
+  <dialog id="comparisonDialog" class="about-dialog"><header class="dialog-header"><h2>코스 비교</h2><button class="dialog-close" data-close="comparisonDialog" aria-label="비교 닫기">×</button></header><div id="comparisonContent" style="overflow:auto"></div><p>점수는 공개 메타데이터 기반 추정입니다. 실제 경치·통행·진입·주차를 보장하지 않습니다.</p></dialog>
   <dialog id="locationDialog" class="location-dialog">
     <header class="dialog-header">
       <div>
@@ -380,7 +383,7 @@
       <label for="citySearch">출발 지역 검색</label><input id="citySearch" type="search" placeholder="서울, 강릉, 부산…"
         autocomplete="off">
       <div id="cityChoices" class="city-choices"></div>
-      <p class="settings-note">지역의 중심 좌표로 추천합니다. 현재 예시 코스는 수도권·강릉·부산 주변에 준비되어 있습니다.</p>
+      <p class="settings-note">선택한 지역의 중심 좌표로 전국 공개 명소와 도로를 검색합니다. 실제 출발 위치와 차이가 있을 수 있습니다.</p>
     </div>
   </dialog>
   <dialog id="jusoMapDialog" class="about-dialog" aria-labelledby="jusoMapTitle">
@@ -413,14 +416,13 @@
           <dd>큰 버튼, 짧은 정보, 지도 중심의 화면. 세부 조건은 정차 화면에서 설정합니다.</dd>
         </div>
         <div>
-          <dt>기능 체험용 웹 MVP</dt>
-          <dd>현재 10개의 예시 코스를 제공합니다. 3D는 코스 경유구간 주변의 실제 고도·도로 데이터를 표시합니다. 내 위치에서 출발하는 전체 왕복 거리·시간·배터리 소모는 단순 추정이며 실시간 도로
-            통제·충전기 상태와 연동되지 않습니다.</dd>
+          <dt>현재 위치에서 만드는 코스</dt>
+          <dd>전국 공개 명소에서 경유지를 조합하고 OSRM 도로망으로 거리·시간을 확인합니다. 실시간 교통·통제·명소 진입·주차와 충전소 상태는 확인되지 않습니다. 점수와 배터리 소모는 추정입니다.</dd>
         </div>
         <div>
           <dt>실제 지형 데이터</dt>
           <dd id="terrainSourcesInfo">Copernicus DEM GLO-90 지표면 고도 데이터와 © OpenStreetMap 도로 데이터를 사용합니다. 지형 높이를 2배로 강조하며,
-            표시 대상은 경유지 사이의 하이라이트 구간입니다.</dd>
+            긴 경로는 표시 범위를 안내합니다. 고도 자료가 없는 곳은 지형을 만들지 않고 도로만 표시합니다.</dd>
         </div>
         <div>
           <dt>데이터 고지</dt>
@@ -436,10 +438,10 @@
         </div>
         <div>
           <dt>위치와 날씨</dt>
-          <dd>현재 위치는 이 세션에서만 사용합니다. 웹의 현재 위치 주소는 OpenStreetMap 데이터에서 찾습니다. 약 1km 단위 좌표로 Open-Meteo 예보를 조회하며, 실패 시 예시
+          <dd>출발 위치는 추천 계산과 도로·주소 조회에 사용하고 서버에 저장하지 않습니다. 주소는 도로명주소 서비스로 조회합니다. 약 1km 단위 좌표로 Open-Meteo 예보를 조회하며, 실패 시 예시
             날씨임을 표시합니다.</dd>
         </div>
-      </dl><a href="https://registry.opendata.aws/copernicus-dem/" target="_blank" rel="noopener noreferrer">Copernicus
+      </dl><p class="settings-note">데이터: © OpenStreetMap contributors · ODbL · <a href="./data/poi-manifest.json" target="_blank" rel="noopener noreferrer">공개 POI 데이터·출처</a> · <a href="./data/pois-osm.ndjson.gz" download>OSM 가공 데이터 받기</a></p><a href="https://registry.opendata.aws/copernicus-dem/" target="_blank" rel="noopener noreferrer">Copernicus
         DEM GLO-90<svg aria-hidden="true">
           <use href="#i-external" />
         </svg></a><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">©

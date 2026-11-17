@@ -27,14 +27,21 @@ jobs:
       - run: pip install osmium numpy Pillow && python -m unittest discover -s tests -p test_poi_pipeline.py
       - run: mvn test -q
         working-directory: backend
+      - name: Restore isolated national road graph
+        uses: actions/cache@v4
+        with:
+          path: data/raw/korea.osrm*
+          key: osrm-mld-v5271-${{ hashFiles('dist/data/poi-manifest.json') }}
       - name: Build an isolated national road graph
         run: |
           mkdir -p data/raw
-          curl --ipv4 --fail --location --retry 4 --retry-all-errors --connect-timeout 20 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
           image=ghcr.io/project-osrm/osrm-backend:v5.27.1
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-extract --threads 2 -p /opt/car.lua /data/korea.osm.pbf
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
+          if [ ! -f data/raw/korea.osrm.mldgr ]; then
+            curl --ipv4 --fail --location --retry 4 --retry-all-errors --connect-timeout 20 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-extract --threads 2 -p /opt/car.lua /data/korea.osm.pbf
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
+          fi
           docker run -d --name flowad-road-test -p 127.0.0.1:5000:10000 -v "$PWD/data/raw:/data:ro" -v "$PWD/deploy/osrm/start.sh:/start.sh:ro" "$image" /bin/sh /start.sh
           for i in $(seq 1 60); do curl --fail --silent 'http://127.0.0.1:5000/nearest/v1/driving/126.978,37.5665?number=1' >/dev/null && exit 0; sleep 2; done
           docker logs flowad-road-test
@@ -51,6 +58,6 @@ jobs:
           pid=$!
           trap 'kill "$pid" || true; docker rm -f flowad-road-test || true' EXIT
           for i in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8787/ >/dev/null && break; sleep 2; done
-          node scripts/validate-national-http.mjs http://127.0.0.1:8787
+          node scripts/validate-national-http.mjs http://127.0.0.1:8787 || { tail -n 40 /tmp/flowad-worker.log; exit 1; }
           docker stats --no-stream --format 'OSRM test memory: {{.MemUsage}}; CPU: {{.CPUPerc}}' flowad-road-test
           echo 'National data + isolated OSRM + local Workers/D1 verified. No production or vehicle account calls.' >> "$GITHUB_STEP_SUMMARY"

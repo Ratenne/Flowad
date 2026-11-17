@@ -28,6 +28,10 @@ try{
   await sql('INSERT OR IGNORE INTO poi_datasets VALUES(?,?,?,?,?,?)',[meta.id,meta.provider,meta.created_at,meta.source_updated_at,meta.attribution,'COMPLETE']);
   await sql('INSERT OR IGNORE INTO poi_storage VALUES(?,?,?)',[meta.id,'CELLS',meta.record_count??manifest.total]);
  }
+ for(const job of manifest.syncJobs??[]){
+  const columns=['id','provider','started_at','finished_at','status','processed','inserted','updated','deleted','rejected','checkpoint','error'];
+  await sql('INSERT OR REPLACE INTO poi_sync_jobs ('+columns.join(',')+') VALUES('+columns.map(()=>'?').join(',')+')',columns.map(k=>job[k]??null));
+ }
  let pending=[],cellRecords=[],cellKey=null,page=0,processed=0,cells=0;
  async function send(){
   if(!pending.length)return;

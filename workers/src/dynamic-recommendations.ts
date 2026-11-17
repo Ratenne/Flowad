@@ -14,7 +14,8 @@ function base(env:Env){
 export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  const coords=points.map(p=>p.longitude+','+p.latitude).join(';');
  const response=await httpJson(`${base(env)}/table/v1/driving/${coords}?annotations=duration,distance&generate_hints=false&radiuses=${points.map(()=>dynamicPolicy.maxSnapMeters).join(';')}`,{signal},dynamicPolicy.tableMs);
- const data=response.data as {code?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
+ const data=response.data as {code?:string;message?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
+ if(data?.code==='NoSegment')throw new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');
  if(response.status!==200||data?.code!=='Ok')throw new Failure('ROAD_TABLE_UNAVAILABLE',503);
  for(const name of ['durations','distances'] as const){const rows=data[name];if(!Array.isArray(rows)||rows.length!==points.length||rows.some(row=>!Array.isArray(row)||row.length!==points.length||row.some(v=>v!==null&&(!Number.isFinite(v)||v<0))))throw new Failure('INVALID_PROVIDER_RESPONSE',503);}
  if(!data.sources||data.sources.length!==points.length||data.sources.some((s,i)=>!Array.isArray(s.location)||s.location.length!==2||!s.location.every(Number.isFinite)||!Number.isFinite(s.distance)||s.distance>100||distance(points[i].latitude,points[i].longitude,s.location[1],s.location[0])>.15))throw new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');
@@ -57,6 +58,14 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  }
  const empty=(status:string,guidance:string)=>({courses:[],status,guidance,weatherExcluded:0,timeExcluded:0,routingFailed:0,diagnostics:diagnostics()});
  if(!candidates.length)return empty('NO_NEARBY_POIS','주변 공개 POI 데이터가 없거나 접근 제한으로 제외됐습니다. 수집 상태와 출발지를 확인해 주세요.');
+ // Dense city centres must not consume the entire matrix with adjacent parks.
+ // Each annulus is still RTree bounded; only the final 20 enter OSRM Table.
+ if(!r.poiIds&&r.availableMinutes>=60&&candidates.length>=6){
+  const middle=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.25);poiQueries++;
+  const outer=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.6);poiQueries++;
+  const used=new Set<string>();
+  candidates=[...candidates.slice(0,6),...middle,...outer,...candidates].filter(p=>{if(used.has(p.id))return false;used.add(p.id);return true;}).slice(0,dynamicPolicy.candidates);
+ }
  candidates=candidates.filter(p=>!unsafe(r,[p]));
  for(const p of candidates)p.attractionScore=attraction(p);
  if(!candidates.length)return empty('WEATHER_UNSAFE','주변 후보가 기상 조건으로 제외됐습니다.');

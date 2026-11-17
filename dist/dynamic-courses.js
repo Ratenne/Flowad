@@ -11,7 +11,7 @@ export function courseFromApi(item){
   walk:Math.max(0,(item.stopMinutes??0)-stops.length*10),shade:mood==='forest'?.7:.2,exposure:mood==='forest'?.3:.8,altitude:0,ease:.5,novelty:.5,
   intro:item.description??'공개 POI와 실제 도로 연결로 구성한 코스입니다.',tags:[mood==='forest'?'숲':mood==='coast'?'해안':'전망'],
   spots:points.map(p=>[p.name,p.type==='ORIGIN'?'선택한 출발 위치':p.type==='RETURN'?'선택한 복귀 위치':p.verification]),
-  waypoints:stops,route:item.route};
+  waypoints:stops,route:item.route,roundTrip:points.at(-1).type==='RETURN'};
 }
 export function bookmarkTemplate(course){
  // Only public stops. Never persist the user's origin, route geometry, weather or signed ticket.

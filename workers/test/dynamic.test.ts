@@ -41,6 +41,18 @@ it('returns a retry delay for provider throttling and releases the routing lease
  expect(await response.json()).toMatchObject({error:'ROAD_PROVIDER_RATE_LIMIT'});
  expect((await e.DB.prepare('SELECT * FROM poi_routing_slots WHERE expires>0').all()).results).toHaveLength(0);
 });
+it('stops after a Route challenge instead of issuing the remaining candidate requests',async()=>{
+ await seed();const e=config({ROAD_ROUTING_URL:'https://roads.test'}),roads=mockRoads();
+ let routeCalls=0;
+ external(url=>{
+  if(url.includes('/table/'))return roads(url);
+  routeCalls++;return new Response('private challenge tokens',{status:429,headers:{'cf-mitigated':'challenge'}});
+ });
+ const response=await call('/api/recommendations',base,{env:e});
+ expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error:'ROAD_PROVIDER_CHALLENGE'});
+ expect(response.headers.get('Retry-After')).toBeNull();expect(routeCalls).toBe(1);
+ expect((await e.DB.prepare('SELECT * FROM poi_routing_slots WHERE expires>0').all()).results).toHaveLength(0);
+});
 it('keeps valid road courses when one unverified POI cannot snap within 100m',async()=>{
  await seed();const roads=mockRoads(true),e=config({ROAD_ROUTING_URL:'https://roads.test'});
  const response=await call('/api/recommendations',{...base,vehicleType:'ice'},{env:e});

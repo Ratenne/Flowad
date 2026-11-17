@@ -11,7 +11,7 @@
   "routes": [{ "pattern": "ravirgo.com/flowad*", "zone_name": "ravirgo.com" }],
   "vars": {
     "FREE_PLAN_MODE": "true",
-    "ROAD_ROUTING_URL": "https://flowad-roads.onrender.com",
+    "ROAD_ROUTING_URL": "https://flowad-roads.ravirgo.com",
     "SAFE_UPSTREAM_DIAGNOSTICS": "true",
     "ALLOWED_ORIGINS": "https://ravirgo.com",
     "FRONTEND_URL": "https://ravirgo.com/flowad/",

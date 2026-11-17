@@ -27,6 +27,7 @@ export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  try{response=await httpJson(url,{signal},dynamicPolicy.tableMs);}
  catch(e){return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');}
  httpStatus=response.status;
+ if(response.challenged)return fail('provider_challenge','ROAD_PROVIDER_CHALLENGE');
  if(response.status===429)return fail('rate_limit','ROAD_PROVIDER_RATE_LIMIT',response.retryAfterSeconds??30);
  const data=response.data as {code?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
  const reasons:Record<string,string>={NoSegment:'no_segment',TooBig:'table_size_limit',InvalidUrl:'invalid_request',InvalidService:'invalid_request',InvalidVersion:'invalid_request',InvalidOptions:'invalid_request',InvalidQuery:'invalid_request',InvalidValue:'invalid_request',NoTable:'no_table',NotImplemented:'unsupported_annotations',Ok:'ok'};
@@ -146,7 +147,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
     'OSM 도로 연결 검증이며 현재 통행·명소 진입·주차 가능성을 보장하지 않습니다.',
     '공개 POI 유형과 메타데이터 기반 점수는 경관 품질 실측이 아닙니다.'
    ]);
-  }catch{routingFailed++;continue;}
+  }catch(e){if(e instanceof Failure&&e.code==='ROAD_PROVIDER_CHALLENGE')throw e;routingFailed++;continue;}
   if(route.status!=='ROAD_ROUTED'){routingFailed++;continue;}
   if(route.totalSeconds>r.availableMinutes*60){timeExcluded++;continue;}
   const direct=routePoints.slice(1).reduce((s,p,i)=>s+distance(routePoints[i].latitude,routePoints[i].longitude,p.latitude,p.longitude),0);

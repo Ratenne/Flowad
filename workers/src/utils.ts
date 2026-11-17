@@ -63,10 +63,16 @@ export function httpsBase(raw: string): string {
   return u.href.replace(/\/+$/, '');
 }
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number }> {
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number; challenged?:boolean }> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
+    // A browser challenge is not an OSRM response or a request-rate allowance.
+    // Do not parse, log, relay or attempt to solve its HTML/clearance tokens.
+    if(response.headers.get('cf-mitigated')==='challenge'){
+      await response.body?.cancel().catch(()=>undefined);
+      return {status:response.status,data:null,challenged:true};
+    }
     if (Number(response.headers.get('content-length')) > 4_000_000) throw new Failure('RESPONSE_TOO_LARGE');
     const reader = response.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
     if (reader) for (;;) { const { done, value } = await reader.read(); if (done) break; size += value.length; if (size > 4_000_000) { await reader.cancel(); throw new Failure('RESPONSE_TOO_LARGE'); } chunks.push(value); }

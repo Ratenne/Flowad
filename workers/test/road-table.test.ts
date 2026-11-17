@@ -3,9 +3,26 @@ import {matrix} from '../src/dynamic-recommendations';
 import {point} from '../src/routing';
 import {Failure} from '../src/utils';
 import {config,external,json} from './helpers';
+import {roadSimplified} from '../src/routing';
 const points=[point(0,'ORIGIN','private origin',37.5,127),point(1,'SCENIC_WAYPOINT','candidate',37.501,127.001),point(2,'RETURN','private return',37.5,127)];
 const env=()=>config({ROAD_ROUTING_URL:'https://roads.test'});
 function table(){return {code:'Ok',sources:points.map(p=>({location:[p.longitude,p.latitude],distance:0})),durations:points.map(()=>points.map(()=>10)),distances:points.map(()=>points.map(()=>100))};}
+it.each([403,429])('distinguishes a provider browser challenge from throttling for HTTP %i',async status=>{
+ const log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ const cancel=vi.fn(),body=new ReadableStream({cancel});
+ external(()=>new Response(body,{status,headers:{'cf-mitigated':'challenge','Retry-After':'30'}}));
+ await expect(matrix(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_CHALLENGE',status:503,retryAfterSeconds:undefined});
+ expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({httpStatus:status,reason:'provider_challenge'});
+ expect(cancel).toHaveBeenCalledOnce();
+ external(()=>new Response('private challenge tokens',{status,headers:{'cf-mitigated':'challenge'}}));
+ await expect(roadSimplified(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_CHALLENGE',status:503});
+ expect(JSON.stringify(log.mock.calls)).not.toContain('private');
+});
+it('preserves challenge classification even when the upstream body has already failed',async()=>{
+ vi.spyOn(console,'error').mockImplementation(()=>{});
+ external(()=>new Response(new ReadableStream({start(controller){controller.error(Error('private upstream error'));}}),{status:429,headers:{'cf-mitigated':'challenge'}}));
+ await expect(matrix(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_CHALLENGE',status:503});
+});
 it('classifies an HTML 429 before JSON parsing and preserves bounded Retry-After',async()=>{
  const log=vi.spyOn(console,'error').mockImplementation(()=>{});
  external(()=>new Response('<h1>Too many requests</h1>',{status:429,headers:{'Retry-After':'17'}}));

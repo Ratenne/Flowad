@@ -25,7 +25,8 @@ async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords
   catch { throw new Failure('PROVIDER_UNAVAILABLE'); }
   return response;
 }
-export function roadResponse(points:Point[],response:{status:number;data:unknown},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {
+export function roadResponse(points:Point[],response:{status:number;data:unknown;challenged?:boolean},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {
+  if(response.challenged)throw new Failure('ROAD_PROVIDER_CHALLENGE',503);
   if(response.status===429)throw new Failure('RATE_LIMIT');
   if(response.status===403)throw new Failure('PROVIDER_PERMISSION_DENIED');
   if(response.status===400){const code=object(response.data).code;throw new Failure(code==='NoSegment'?'WAYPOINT_TOO_FAR_FROM_ROAD':code==='NoRoute'?'NO_ROAD_ROUTE':'INVALID_PROVIDER_RESPONSE');}

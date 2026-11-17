@@ -26,4 +26,7 @@ context.state.recommendationRetryAt=0;
 const retry=get('#applySettings').click();assert.equal(requests.length,2);
 requests[1].resolve({ok:true,json:async()=>({courses:[{id:'dyn-settings-test',name:'동적 테스트',estimatedMinutes:30,estimatedRoundTripKm:10,route:{status:'ROAD_ROUTED',points:[{name:'출발',type:'ORIGIN',latitude:37.5,longitude:127},{name:'복귀',type:'RETURN',latitude:37.5,longitude:127}]}}]})});await retry;
 assert.equal(context.recommendations.length,1);await get('#applySettings').click();assert.equal(requests.length,2,'Unchanged successful settings need no extra request');
-console.log('PASS: deferred settings, explicit apply, pending-click deduplication, rate-limit cooldown and explicit retry.');
+context.state.settingsDirty=true;const challenged=get('#applySettings').click();assert.equal(requests.length,3);
+requests[2].resolve({ok:false,json:async()=>({error:'ROAD_PROVIDER_CHALLENGE'})});await challenged;
+assert.match(get('#resultStatus').textContent,/보안 검증/);assert.doesNotMatch(get('#resultStatus').textContent,/초 뒤/);assert.equal(context.state.recommendationRetryAt,0);
+console.log('PASS: deferred settings, explicit apply, pending-click deduplication, rate-limit cooldown, explicit retry and provider challenge feedback.');

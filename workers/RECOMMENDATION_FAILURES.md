@@ -8,4 +8,16 @@
 
 운영 로그에서 도로 Table 응답 HTTP 429와 후속 추천 요청의 503을 확인했다. 이 수정은 중복 호출과 오류 처리를 개선하며 외부 도로 서버의 가용성이나 요청 제한 해제를 보장하지 않는다. 오류 로그에는 좌표·공급자 응답 본문·비밀키를 기록하지 않는다. 실제 경로 실패를 추정 경로 성공으로 바꾸지 않는다.
 
+## Render 서버 간 연결 차단 (2026-11-17)
+
+운영 추천 POST를 대전 중심 공개 좌표로 실행해 `ROAD_PROVIDER_RATE_LIMIT`을 재현했다. 격리 Cloudflare 원격 preview에서도 기존 `flowad-roads.onrender.com`의 Table뿐 아니라 `/` 요청이 HTTP 429, `cf-mitigated: challenge`, HTML `Just a moment...`를 반환했다. 같은 PC에서 직접 요청한 `/`는 OSRM `InvalidUrl` JSON을 반환했다. 이는 OSRM 계산 전에 Render 앞단 Cloudflare 보안 계층에서 서버 간 요청이 차단된 증거다. 공급자의 비공개 탐지 규칙, IP별 임계값은 확인할 수 없으며 `unlimited`나 PC의 위치 권한을 원인으로 단정하지 않는다.
+
+동일 Render 서비스에 `flowad-roads.ravirgo.com`을 정식 custom domain으로 등록하고 DNS CNAME을 기존 서비스로 연결했다. TLS 인증서를 확인한 뒤 Worker의 `ROAD_ROUTING_URL`만 새 주소로 전환한다. OSM 그래프·도로 스냅 제한·후보 수·반경 정책·사용자 위치 탐색은 유지한다. 기존 호스트의 보안 설정을 끄거나 브라우저 challenge/clearance를 자동 해결하지 않는다. 공개 장소 두 좌표를 반복한 22×22 Table을 기존 `100;unlimited;...;100` 옵션으로 새 도메인에 요청해 HTTP 200, `Ok`, 유효한 행렬을 확인했다. 이 점검은 실제 서로 다른 20개 POI 코스의 검증과 구분한다.
+
+`httpJson`은 공식 `cf-mitigated: challenge` 헤더를 감지하면 HTML을 읽지 않고 본문 스트림을 취소한다. Table/Route는 `ROAD_PROVIDER_CHALLENGE`로 구분하고 UI도 연결 설정 문제로 안내한다. Route 단계에서 challenge가 발생하면 나머지 후보 호출을 중단한다. 진짜 HTTP 429는 기존 `ROAD_PROVIDER_RATE_LIMIT`/Retry-After 정책을 유지한다. 단순 30초 재시도로 보안 검증이 해결된다고 안내하지 않는다.
+
+DNS/인증서 변경은 Render 공식 custom domain 및 Cloudflare DNS 절차를 따른다. 무료 플랜 유휴 종료와 콜드 스타트는 별도 제약으로 남는다. 롤백은 Git의 이전 `ROAD_ROUTING_URL` 값으로 되돌릴 수 있으나, 기존 호스트의 차단이 재발할 수 있어 정상 복구 수단으로 보장하지 않는다. 도메인은 다른 자원에서 참조하지 않는 것을 확인하기 전에 삭제하지 않는다.
+
+참고: [Challenge 응답 식별](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/), [Render Cloudflare DNS](https://render.com/docs/configure-cloudflare-dns).
+
 검증: `npm run check:ci`(workers), `node scripts/test-recommendation-settings.mjs`(저장소 루트). 설정 적용·재시도는 브라우저/API Mock, 공급자 429·중복 계산·요청 취소·슬롯 반환은 로컬 Workers/D1 Mock으로 검증한다. 실제 차량 명령과 운영 추천 POST 테스트는 실행하지 않는다.

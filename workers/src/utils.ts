@@ -2,7 +2,7 @@ import { z } from 'zod';
 // Avoid per-schema dynamic validator compilation on a cold edge isolate.
 z.config({jitless:true});
 export class Failure extends Error {
-  constructor(public code: string, public status: 400 | 403 | 409 | 413 | 429 | 503 = 400) { super(code); }
+  constructor(public code: string, public status: 400 | 403 | 409 | 413 | 429 | 503 = 400, public retryAfterSeconds?:number) { super(code); }
 }
 export const coordinate = z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) });
 export const now = () => Math.floor(Date.now() / 1000);
@@ -63,7 +63,7 @@ export function httpsBase(raw: string): string {
   return u.href.replace(/\/+$/, '');
 }
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown }> {
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number }> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
@@ -75,7 +75,9 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
     if(chunks.length===1)raw=chunks[0];
     else {raw=new Uint8Array(size);let at=0;for(const chunk of chunks){raw.set(chunk,at);at+=chunk.length;}}
     let data: unknown = null; try { data = JSON.parse(new TextDecoder().decode(raw)); } catch { /* Map HTTP status before invalid body. */ }
-    return { status: response.status, data };
+    const retryAfter=response.headers.get('Retry-After');
+    const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):retryAfter?Math.ceil((Date.parse(retryAfter)-Date.now())/1000):NaN;
+    return { status: response.status, data,...(Number.isFinite(seconds)&&seconds>0?{retryAfterSeconds:Math.min(300,seconds)}:{}) };
   } catch (e) { if (e instanceof Failure) throw e; throw new Failure(controller.signal.aborted ? 'UPSTREAM_TIMEOUT' : 'SERVICE_UNAVAILABLE'); }
   finally { clearTimeout(timer); }
 }

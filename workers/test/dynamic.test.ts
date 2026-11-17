@@ -1,4 +1,4 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import {call,base,config,external,json} from './helpers';
 import {distance} from '../src/utils';
 import {resolve} from '../src/tickets';
@@ -21,6 +21,26 @@ function mockRoads(rejectFirst=false){return external(url=>{
  if(u.pathname.includes('/table/'))return json({code:'Ok',sources:coords.map((location,i)=>({location,distance:rejectFirst&&i===1?563:0})),durations:coords.map(a=>coords.map(b=>meters(a,b)/14)),distances:coords.map(a=>coords.map(b=>meters(a,b)))});
  return json({code:'Ok',waypoints:coords.map(location=>({location,distance:0})),routes:[{legs:coords.slice(1).map((b,i)=>({distance:meters(coords[i],b),duration:meters(coords[i],b)/14,steps:[{geometry:{coordinates:[coords[i],b]}}]}))}]});
 });}
+it('shares identical pending conditions across different request IDs',async()=>{
+ await seed();const e=config({ROAD_ROUTING_URL:'https://roads.test'}),roads=mockRoads();
+ let release!:()=>void,entered!:()=>void;
+ const gate=new Promise<void>(r=>{release=r;}),started=new Promise<void>(r=>{entered=r;});
+ external(async url=>{if(url.includes('/table/')){entered();await gate;}return roads(url);});
+ const first=call('/api/recommendations',{...base,requestId:'request-one'},{env:e});await started;
+ const second=call('/api/recommendations',{...base,requestId:'request-two'},{env:e});
+ await new Promise(r=>setTimeout(r,100));release();
+ const responses=await Promise.all([first,second]);expect(responses.map(r=>r.status)).toEqual([200,200]);
+ expect(roads.mock.calls.filter(([url])=>String(url).includes('/table/'))).toHaveLength(1);
+ expect((await e.DB.prepare('SELECT * FROM poi_routing_slots WHERE expires>0').all()).results).toHaveLength(0);
+});
+it('returns a retry delay for provider throttling and releases the routing lease',async()=>{
+ await seed();vi.spyOn(console,'error').mockImplementation(()=>{});const e=config({ROAD_ROUTING_URL:'https://roads.test'});
+ external(()=>new Response('rate limited',{status:429,headers:{'Retry-After':'17'}}));
+ const response=await call('/api/recommendations',base,{env:e});
+ expect(response.status).toBe(503);expect(response.headers.get('Retry-After')).toBe('17');
+ expect(await response.json()).toMatchObject({error:'ROAD_PROVIDER_RATE_LIMIT'});
+ expect((await e.DB.prepare('SELECT * FROM poi_routing_slots WHERE expires>0').all()).results).toHaveLength(0);
+});
 it('keeps valid road courses when one unverified POI cannot snap within 100m',async()=>{
  await seed();const roads=mockRoads(true),e=config({ROAD_ROUTING_URL:'https://roads.test'});
  const response=await call('/api/recommendations',{...base,vehicleType:'ice'},{env:e});

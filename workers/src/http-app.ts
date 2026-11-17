@@ -29,7 +29,7 @@ export function createApiApp(methods:Record<string,'GET'|'POST'>){
  app.use('/api/*',async(c,next)=>{await quota(c.env,`ip:${c.req.header('CF-Connecting-IP')??'local'}`,120);await next();});
  app.notFound(c=>c.json({error:'NOT_FOUND'},404));
  app.onError((error,c)=>{
-  if(error instanceof Failure)return c.json({error:error.code},error.status);
+  if(error instanceof Failure){if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({error:error.code},error.status);}
   if(error instanceof z.ZodError||error instanceof SyntaxError)return c.json({error:'INVALID_REQUEST'},400);
   return c.json({error:'SERVICE_UNAVAILABLE'},503);
  });

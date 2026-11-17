@@ -29,6 +29,7 @@ function invalidateLocationWork(){
  weatherAbort?.abort();
  recommendationRequest++;
  recommendationAbort?.abort();
+ state.recommendationLoading=false;
 }
 function setLocating(on){
  state.locating=on;
@@ -108,19 +109,32 @@ function syncSelection(updateScene=true){const r=activeCourse(),valid=canPreview
 function selectRoute(id){const selected=effectiveRoutes().find(r=>r.id===id);if(!selected)return;if(selected.savedTemplate){if(!state.location){toast('먼저 출발 위치를 선택해 주세요.');return;}state.savedPoiIds=selected.waypoints.map(p=>p.id).filter(Boolean);updateResults();return;}state.selected=id;syncSelection();syncFooter()}
 async function updateResults(){
  if(state.locating)return;
+ if($('#settingsDialog').open){state.settingsDirty=true;return;}
+ if(Date.now()<(state.recommendationRetryAt??0)){$('#resultStatus').textContent=recommendationRateMessage();return;}
+ state.settingsDirty=false;
  const token=++recommendationRequest; recommendationAbort?.abort(); state.tab='all';
  if(!state.location){recommendations=[];render();return}
  const controller=new AbortController(); recommendationAbort=controller; const timer=setTimeout(()=>controller.abort(),120000);
+ state.recommendationLoading=true;
  recommendations=[];sceneAPI?.clear?.();render();$('#noMatch').hidden=true;$('#resultStatus').textContent='위치 확인 완료 · 추천 코스를 찾고 있어요…';
  const toWeather=w=>({condition:w.weather,temperatureC:w.temp,windMps:w.wind,severe:!!w.severe,source:state.weatherSource==='live'?(w.scope==='origin'?'Open-Meteo origin forecast':'Open-Meteo forecast'):state.weatherSource==='manual'?'user input':'example',observedAt:w.time?new Date(w.time).toISOString():null});
  const courseWeather=Object.fromEntries(effectiveRoutes().map(r=>[r.id,toWeather(weatherFor(r))]));
  const body={requestId:crypto.randomUUID(),originSource:state.location.kind,roundTrip:$('#tripMode').value!=='oneway',poiIds:state.savedPoiIds,latitude:state.location.lat,longitude:state.location.lng,availableMinutes:+$('#duration').value,scenery:state.mood,vehicleType:state.vehicle,batteryPercent:state.vehicle==='ev'?+$('#battery').value:null,estimatedRangeKm:state.vehicle==='ev'?+$('#range').value:null,weather:toWeather({weather:state.weather,temp:state.temp,wind:state.wind,severe:state.originSevere}),courseWeather,originSevere:!!state.originSevere,walking:$('#walking').checked,departure:$('#departure').value};
- try{const response=await fetch('./api/recommendations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});if(!response.ok){let err={};try{err=await response.json()}catch{}throw new Error(err.error||'API error')}const data=await response.json();if(token!==recommendationRequest)return;
+ try{const response=await fetch('./api/recommendations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:controller.signal});if(!response.ok){let err={};try{err=await response.json()}catch{}if(err.error==='ROAD_PROVIDER_RATE_LIMIT')state.recommendationRetryAt=Date.now()+Math.min(300,Math.max(1,Number(response.headers?.get?.('Retry-After'))||30))*1000;throw new Error(err.error||'API error')}const data=await response.json();if(token!==recommendationRequest)return;
  recommendations=data.courses.map(courseFromApi);routes=recommendations;
  const previous=state.selected;if(recommendations.length)state.selected=state.drivingPreview&&recommendations.some(r=>r.id===previous)?previous:recommendations[0].id;else if(state.drivingPreview)setDrivingPreview(false);
  render();$('#resultStatus').textContent=recommendations.length?`${state.location.label} 출발 · 추천 ${recommendations.length}개 · ${recommendations[0].route?.status==='ROAD_ROUTED'?'도로 경로 · 시간 예상':'거리·시간 추정'}`:'위치 확인 완료 · '+(data.guidance||'이 위치와 조건에 맞는 도로 코스를 만들지 못했어요. 출발 지역이나 여정 시간을 바꿔 보세요.');syncSelection();if(!state.courseForecastLoaded&&recommendations.length&&state.weatherSource==='live'){state.courseForecastLoaded=true;loadWeather();}
- }catch(e){if(token!==recommendationRequest)return;recommendations=[];if(state.drivingPreview)setDrivingPreview(false);render();$('#noMatch').hidden=true;$('#resultStatus').textContent=({WAYPOINT_TOO_FAR_FROM_ROAD:'출발지 또는 주변 명소에 연결되는 차량 도로를 찾지 못했어요. 출발 위치나 지역을 확인해 주세요.',RECOMMENDATION_BUSY:'도로 검색이 진행 중입니다. 잠시 후 다시 시도해 주세요.'})[e.message]||'위치는 확인했지만 코스 추천을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';}finally{clearTimeout(timer)}
+ }catch(e){if(token!==recommendationRequest)return;recommendations=[];if(state.drivingPreview)setDrivingPreview(false);render();$('#noMatch').hidden=true;$('#resultStatus').textContent=({ROAD_PROVIDER_RATE_LIMIT:recommendationRateMessage(),ROAD_TABLE_UNAVAILABLE:'도로 서버가 준비 중이거나 응답하지 않습니다. 잠시 후 추천 코스를 다시 조회해 주세요.',WAYPOINT_TOO_FAR_FROM_ROAD:'출발지 또는 주변 명소에 연결되는 차량 도로를 찾지 못했어요. 출발 위치나 지역을 확인해 주세요.',RECOMMENDATION_BUSY:'도로 검색이 진행 중입니다. 잠시 후 다시 시도해 주세요.'})[e.message]||'위치는 확인했지만 코스 추천을 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';}finally{clearTimeout(timer);if(token===recommendationRequest)state.recommendationLoading=false;}
 }
+function recommendationRateMessage(){return '도로 서버의 요청 제한으로 대기 중입니다. '+Math.max(1,Math.ceil(((state.recommendationRetryAt??Date.now())-Date.now())/1000))+'초 뒤 다시 조회해 주세요.';}
+function applyRecommendationSettings(){
+ $('#settingsDialog').close();
+ if(state.locating){toast('위치를 확인하고 있어요. 측정 후 추천을 진행합니다.');return;}
+ if(!state.location){renderCities();openDialog($('#locationDialog'));return;}
+ const dirty=state.settingsDirty;state.settingsDirty=false;
+ if(dirty||!recommendations.length&&!state.recommendationLoading)return updateResults();
+}
+$('#settingsDialog').addEventListener('close',()=>{if(state.settingsDirty&&state.location&&!state.locating){state.settingsDirty=false;updateResults();}});
 
 $('#routeCards').addEventListener('change',e=>{const checkbox=e.target.closest('[data-compare]');if(!checkbox)return;const id=checkbox.dataset.compare;if(checkbox.checked){if(compareIds.size>=3){checkbox.checked=false;toast('최대 3개 코스를 비교할 수 있어요.');return;}compareIds.add(id);}else compareIds.delete(id);$('#compareRoutes').disabled=compareIds.size<2;});
 $('#compareRoutes').addEventListener('click',()=>{const list=recommendations.filter(r=>compareIds.has(r.id));$('#comparisonContent').innerHTML='<table><thead><tr><th>코스</th><th>총 시간</th><th>거리</th><th>메타데이터 점수</th><th>접근 상태</th></tr></thead><tbody>'+list.map(r=>'<tr><td>'+safeText(r.name)+'</td><td>'+r.apiMinutes+'분</td><td>'+r.km+'km</td><td>'+r.score+'/100</td><td>도로 연결 확인 · 명소 진입·주차 미확인</td></tr>').join('')+'</tbody></table>';openDialog($('#comparisonDialog'));});
@@ -142,7 +156,7 @@ function setDrivingPreview(on){if(on&&!canPreview()){toast('먼저 현재 위치
 function initCarControls(){
 $('#allTab').addEventListener('click',()=>setTab('all'));$('#savedNav').addEventListener('click',()=>setTab('saved'));$('#backToResults').addEventListener('click',()=>setTab('all'));$('#routeCards').addEventListener('click',e=>{const b=e.target.closest('[data-preview]');if(b)selectRoute(b.dataset.preview)});$('#selectedDetail').addEventListener('click',()=>showDetail(state.selected));$('#heroLocate').addEventListener('click',()=>{if(locationEnvironment.vehicle)requestPreferredLocation();else if(state.location?.kind==='tesla')$('#teslaLocation').click();else if(!state.location)requestPreferredLocation();else if(state.location.kind==='gps')requestLocation();else updateResults()});
 $$('[data-duration]').forEach(b=>b.addEventListener('click',()=>{$('#duration').value=b.dataset.duration;updateResults()}));$('#expandDuration').addEventListener('click',()=>{$('#duration').value='480';updateResults()});
-$('#settingsBtn').addEventListener('click',()=>showSettings('trip'));$('#quickSettings').addEventListener('click',()=>showSettings('trip'));$('#vehicleSettings').addEventListener('click',()=>showSettings('vehicle'));$('#applySettings').addEventListener('click',()=>$('#settingsDialog').close());$$('[data-setting-tab]').forEach(b=>{b.addEventListener('click',()=>setSettingsTab(b.dataset.settingTab));b.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=$$('[data-setting-tab]'),i=tabs.indexOf(b),j=e.key==='Home'?0:e.key==='End'?2:(i+(e.key==='ArrowRight'?1:2))%3;setSettingsTab(tabs[j].dataset.settingTab);tabs[j].focus()})});
+$('#settingsBtn').addEventListener('click',()=>showSettings('trip'));$('#quickSettings').addEventListener('click',()=>showSettings('trip'));$('#vehicleSettings').addEventListener('click',()=>showSettings('vehicle'));$('#applySettings').addEventListener('click',applyRecommendationSettings);$$('[data-setting-tab]').forEach(b=>{b.addEventListener('click',()=>setSettingsTab(b.dataset.settingTab));b.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const tabs=$$('[data-setting-tab]'),i=tabs.indexOf(b),j=e.key==='Home'?0:e.key==='End'?2:(i+(e.key==='ArrowRight'?1:2))%3;setSettingsTab(tabs[j].dataset.settingTab);tabs[j].focus()})});
 $('#moodChips').addEventListener('click',e=>{const b=e.target.closest('[data-mood]');if(!b)return;state.mood=b.dataset.mood;$$('[data-mood]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',x===b)});updateResults()});
 $$('[data-vehicle]').forEach(b=>b.addEventListener('click',()=>{state.vehicle=b.dataset.vehicle;$$('[data-vehicle]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',x===b)});$('#batteryOption').hidden=state.vehicle!=='ev';updateResults()}));
 $$('[data-weather]').forEach(b=>b.addEventListener('click',()=>{state.weather=b.dataset.weather;updateWeather()}));$$('[data-step]').forEach(b=>b.addEventListener('click',()=>{const [id,amount]=b.dataset.step.split(':'),input=$('#'+id);input.value=Math.min(+input.max,Math.max(+input.min,+input.value+(+amount)));if(id==='battery'){teslaBatteryReading=null;$('#batteryValue').textContent=input.value+'%';updateResults()}else{state[id==='temperature'?'temp':'wind']=+input.value;updateWeather()}}));

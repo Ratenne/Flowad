@@ -79,6 +79,14 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  }
  const empty=(status:string,guidance:string)=>({courses:[],status,guidance,weatherExcluded:0,timeExcluded:0,routingFailed:0,diagnostics:diagnostics()});
  if(!candidates.length)return empty('NO_NEARBY_POIS','주변 공개 POI 데이터가 없거나 접근 제한으로 제외됐습니다. 수집 상태와 출발지를 확인해 주세요.');
+ // Dense city centres must not consume the entire matrix with adjacent parks.
+ // Each annulus is still RTree bounded; only the final 20 enter OSRM Table.
+ if(!r.poiIds&&r.availableMinutes>=60&&candidates.length>=6){
+  const middle=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.25);poiQueries++;
+  const outer=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.6);poiQueries++;
+  const used=new Set<string>();
+  candidates=[...candidates.slice(0,6),...middle,...outer,...candidates].filter(p=>{if(used.has(p.id))return false;used.add(p.id);return true;}).slice(0,dynamicPolicy.candidates);
+ }
  candidates=candidates.filter(p=>!unsafe(r,[p]));
  for(const p of candidates)p.attractionScore=attraction(p);
  if(!candidates.length)return empty('WEATHER_UNSAFE','주변 후보가 기상 조건으로 제외됐습니다.');

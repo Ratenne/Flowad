@@ -1,4 +1,12 @@
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
+export function arrivalTimes(course,departure){
+ let time=departure;
+ const stopSeconds=(course.route?.stopSeconds??0)/Math.max(1,course.waypoints?.length??0);
+ return (course.route?.points??[]).map((p,i)=>{
+  if(i){time+=(course.route.legs?.[i-1]?.durationSeconds??0)*1000;if(course.route.points[i-1].type==='SCENIC_WAYPOINT')time+=stopSeconds*1000;}
+  return time;
+ });
+}
 export function courseFromApi(item){
  if(!item||typeof item.id!=='string'||!/^[\w-]{1,100}$/.test(item.id)||typeof item.name!=='string'||!finite(item.estimatedRoundTripKm)||!finite(item.estimatedMinutes)||!Array.isArray(item.route?.points))throw Error('INVALID_DYNAMIC_COURSE');
  const points=item.route.points;
@@ -10,8 +18,8 @@ export function courseFromApi(item){
   km:item.estimatedRoundTripKm,minutes:item.estimatedMinutes,apiMinutes:item.estimatedMinutes,apiReasons:item.reasons??[],
   walk:Math.max(0,(item.stopMinutes??0)-stops.length*10),shade:mood==='forest'?.7:.2,exposure:mood==='forest'?.3:.8,altitude:0,ease:.5,novelty:.5,
   intro:item.description??'공개 POI와 실제 도로 연결로 구성한 코스입니다.',tags:[mood==='forest'?'숲':mood==='coast'?'해안':'전망'],
-  spots:points.map(p=>[p.name,p.type==='ORIGIN'?'선택한 출발 위치':p.type==='RETURN'?'선택한 복귀 위치':p.verification]),
-  waypoints:stops,route:item.route};
+  spots:points.map(p=>[p.name,p.type==='ORIGIN'?'선택한 출발 위치':p.type==='RETURN'?'선택한 복귀 위치':({POSSIBLE_ACCESS:'도로 접근 후보 · 명소 진입과 주차는 미확인',VERIFIED_ACCESS:'기록된 접근 확인 정보 · 현재 통행은 별도 확인',UNVERIFIED_ACCESS:'차량 접근 미확인'})[p.verification]||'현재 명소 진입과 주차는 미확인']),
+  waypoints:stops,route:item.route,roundTrip:points.at(-1).type==='RETURN'};
 }
 export function bookmarkTemplate(course){
  // Only public stops. Never persist the user's origin, route geometry, weather or signed ticket.

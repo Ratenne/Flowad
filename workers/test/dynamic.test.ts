@@ -65,6 +65,13 @@ it('does not fabricate routes when data, road provider or time budget is insuffi
  await seed();expect(await(await call('/api/recommendations',{...base,availableMinutes:1},{env:e})).json()).toMatchObject({courses:[],status:'NO_FEASIBLE_ROUTE'});
  external(()=>json({code:'NoRoute'},503));expect((await call('/api/recommendations',base,{env:e})).status).toBe(503);
 });
+it('includes a reachable outer driving area instead of only adjacent city-centre POIs',async()=>{
+ await seed();const e=config({ROAD_ROUTING_URL:'https://roads.test'}),db=e.DB;
+ await db.prepare("UPDATE pois SET latitude=37.9,longitude=127.1 WHERE id='fixture:서울:5'").run();
+ await db.prepare("UPDATE poi_access_points SET latitude=37.9,longitude=127.1 WHERE poi_id='fixture:서울:5'").run();
+ const roads=mockRoads(),response=await call('/api/recommendations',{...base,vehicleType:'ice'},{env:e});
+ expect(response.status).toBe(200);expect(roads.mock.calls.some(c=>String(c[0]).includes('127.1,37.9'))).toBe(true);
+});
 it('keeps severe-weather, walking, scenery and EV conditions on dynamic candidates',async()=>{
  await seed();mockRoads();const e=config({ROAD_ROUTING_URL:'https://roads.test'});
  expect(await(await call('/api/recommendations',{...base,originSevere:true},{env:e})).json()).toMatchObject({courses:[],status:'WEATHER_UNSAFE'});

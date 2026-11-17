@@ -27,14 +27,24 @@ jobs:
       - run: pip install osmium numpy Pillow && python -m unittest discover -s tests -p test_poi_pipeline.py
       - run: mvn test -q
         working-directory: backend
+      - name: Restore isolated national road graph
+        uses: actions/cache@v4
+        with:
+          path: data/raw/korea.osrm*
+          key: osrm-mld-v5271-${{ hashFiles('dist/data/poi-manifest.json') }}
       - name: Build an isolated national road graph
         run: |
           mkdir -p data/raw
-          curl --ipv4 --fail --location --retry 4 --retry-all-errors --connect-timeout 20 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
           image=ghcr.io/project-osrm/osrm-backend:v5.27.1
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-extract --threads 2 -p /opt/car.lua /data/korea.osm.pbf
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm
-          docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
+          if [ ! -f data/raw/korea.osrm.mldgr ]; then
+            curl --ipv4 --fail --location --retry 4 --retry-all-errors --connect-timeout 20 https://download.geofabrik.de/asia/south-korea-latest.osm.pbf -o data/raw/korea.osm.pbf
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-extract --threads 2 -p /opt/car.lua /data/korea.osm.pbf
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm
+            docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
+          fi
+          # OSRM creates this public graph index as root with mode 0600.
+          # The runner must be able to archive it for the next isolated run.
+          sudo chmod a+r data/raw/korea.osrm.fileIndex
           docker run -d --name flowad-road-test -p 127.0.0.1:5000:10000 -v "$PWD/data/raw:/data:ro" -v "$PWD/deploy/osrm/start.sh:/start.sh:ro" "$image" /bin/sh /start.sh
           node workers/scripts/check-national-osrm.mjs http://127.0.0.1:5000
       - name: Load only the public snapshot into local D1

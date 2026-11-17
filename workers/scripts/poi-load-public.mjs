@@ -7,6 +7,7 @@ import {createInterface} from 'node:readline';
 import {resolve,join} from 'node:path';
 import {getPlatformProxy} from 'wrangler';
 import {cf,accountId} from './cloudflare-client.mjs';
+import {preserveRollback} from './poi-rollback.mjs';
 const args=process.argv.slice(2),remote=args.includes('--remote'),database=args.find(a=>a.startsWith('--database='))?.split('=')[1];
 if(remote&&!/^[a-f0-9-]{36}$/.test(database??''))throw Error('Explicit remote database UUID required');
 const directory=resolve('../dist/data'),manifest=JSON.parse(await readFile(join(directory,'poi-manifest.json'),'utf8'));
@@ -27,6 +28,10 @@ try{
  for(const meta of manifest.metadata){
   await sql('INSERT OR IGNORE INTO poi_datasets VALUES(?,?,?,?,?,?)',[meta.id,meta.provider,meta.created_at,meta.source_updated_at,meta.attribution,'COMPLETE']);
   await sql('INSERT OR IGNORE INTO poi_storage VALUES(?,?,?)',[meta.id,'CELLS',meta.record_count??manifest.total]);
+ }
+ for(const job of manifest.syncJobs??[]){
+  const columns=['id','provider','started_at','finished_at','status','processed','inserted','updated','deleted','rejected','checkpoint','error'];
+  await sql('INSERT OR REPLACE INTO poi_sync_jobs ('+columns.join(',')+') VALUES('+columns.map(()=>'?').join(',')+')',columns.map(k=>job[k]??null));
  }
  let pending=[],cellRecords=[],cellKey=null,page=0,processed=0,cells=0;
  async function send(){
@@ -63,7 +68,7 @@ try{
  const count=await sql(`SELECT sum(json_array_length(records_json)) total FROM poi_cells WHERE dataset_id IN (${ids})`,manifest.datasets);
  if(Number(count[0].total)!==manifest.total)throw Error('D1 record count mismatch; not activated');
  const before=await sql('SELECT * FROM poi_provider_state');
- await writeFile(statePath+'.rollback.sql',before.map(r=>`INSERT OR REPLACE INTO poi_provider_state VALUES('${r.provider}','${r.active_dataset}');`).join('\n'));
+ await preserveRollback(statePath+'.rollback.sql',before,manifest.metadata);
  for(const meta of manifest.metadata)await sql('INSERT OR REPLACE INTO poi_provider_state VALUES(?,?)',[meta.provider,meta.id]);
  console.log(JSON.stringify({activated:manifest.datasets,records:processed,cells,rowsWritten:state.rowsWritten,remote}));
 }finally{await platform?.dispose();}

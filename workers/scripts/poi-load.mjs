@@ -4,6 +4,7 @@ import {resolve,join} from 'node:path';
 import {createHash} from 'node:crypto';
 import {getPlatformProxy} from 'wrangler';
 import {cf,accountId} from './cloudflare-client.mjs';
+import {preserveRollback} from './poi-rollback.mjs';
 const args=process.argv.slice(2),remote=args.includes('--remote'),directory=resolve(args[0]??'../data/generated/d1');
 const database=args.find(a=>a.startsWith('--database='))?.split('=')[1];
 if(remote&&!/^[a-f0-9-]{36}$/.test(database??''))throw Error('Remote load requires an explicit database UUID');
@@ -35,7 +36,8 @@ const rows=await query(manifest.format==='CELLS'?`SELECT sum(json_array_length(r
 if(Number(rows[0].total)!==expected)throw Error('Snapshot count mismatch; activation refused');
 const integrity=await query('PRAGMA foreign_key_check');if(integrity.length)throw Error('Foreign key check failed');
 const previous=await query('SELECT * FROM poi_provider_state');
-await writeFile(checkpointPath+'.rollback.sql',previous.map(r=>`INSERT OR REPLACE INTO poi_provider_state VALUES('${r.provider}','${r.active_dataset}');`).join('\n'));
+const targets=await query(`SELECT provider,id FROM poi_datasets WHERE id IN (${ids})`);
+await preserveRollback(checkpointPath+'.rollback.sql',previous,targets);
 for(const sql of (await readFile(join(directory,'activate.sql'),'utf8')).split('\n').filter(Boolean))await query(sql);
 console.log(JSON.stringify({activated:manifest.datasets,rows:expected,remote,rowsWritten:checkpoint.rowsWritten}));
 await local?.dispose();

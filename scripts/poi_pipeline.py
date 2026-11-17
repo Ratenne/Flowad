@@ -348,7 +348,8 @@ def export_cells(store,directory):
     (directory/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding='utf-8')
     public_files=[f'pois-{s["provider"].lower()}.ndjson.gz' for s in states]
     source_metadata=[{**dict(store.db.execute('SELECT * FROM poi_datasets WHERE id=?',(s['active_dataset'],)).fetchone()),'id':d,'record_count':store.db.execute('SELECT count(*) FROM pois WHERE dataset_id=?',(s['active_dataset'],)).fetchone()[0]} for s,d in zip(states,datasets)]
-    (ROOT/'dist/data/poi-manifest.json').write_text(json.dumps({'datasets':datasets,'metadata':source_metadata,'total':store.stats()['total'],'attributions':ATTR,'license':'OSM-derived records: ODbL 1.0; TourAPI records separately attributed','files':public_files,'checksums':{name:hashlib.sha256((ROOT/'dist/data'/name).read_bytes()).hexdigest() for name in public_files}},ensure_ascii=False),encoding='utf-8')
+    jobs=[dict(r) for r in store.db.execute("SELECT * FROM poi_sync_jobs WHERE status IN ('COMPLETE','BLOCKED_MISSING_CREDENTIAL')")]
+    (ROOT/'dist/data/poi-manifest.json').write_text(json.dumps({'datasets':datasets,'metadata':source_metadata,'syncJobs':jobs,'total':store.stats()['total'],'attributions':ATTR,'license':'OSM-derived records: ODbL 1.0; TourAPI records separately attributed','files':public_files,'checksums':{name:hashlib.sha256((ROOT/'dist/data'/name).read_bytes()).hexdigest() for name in public_files}},ensure_ascii=False),encoding='utf-8')
     return {'directory':str(directory),'datasets':datasets,'cells':cell_count,'files':len(files),'records':store.stats()['total']}
 
 def main():

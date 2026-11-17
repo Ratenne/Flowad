@@ -43,9 +43,7 @@ jobs:
             docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
           fi
           docker run -d --name flowad-road-test -p 127.0.0.1:5000:10000 -v "$PWD/data/raw:/data:ro" -v "$PWD/deploy/osrm/start.sh:/start.sh:ro" "$image" /bin/sh /start.sh
-          for i in $(seq 1 60); do curl --fail --silent 'http://127.0.0.1:5000/nearest/v1/driving/126.978,37.5665?number=1' >/dev/null && exit 0; sleep 2; done
-          docker logs flowad-road-test
-          exit 1
+          node workers/scripts/check-national-osrm.mjs http://127.0.0.1:5000
       - name: Load only the public snapshot into local D1
         working-directory: workers
         run: |
@@ -54,10 +52,33 @@ jobs:
       - name: Verify six origins and signed vehicle contracts against isolated real roads
         working-directory: workers
         run: |
-          npx wrangler dev --config wrangler.local.jsonc --port 8787 --var ROAD_ROUTING_URL:http://127.0.0.1:5000 > /tmp/flowad-worker.log 2>&1 &
+          setsid npx wrangler dev --config wrangler.local.jsonc --port 8787 --var ROAD_ROUTING_URL:http://127.0.0.1:5000 > /tmp/flowad-worker.log 2>&1 &
           pid=$!
-          trap 'kill "$pid" || true; docker rm -f flowad-road-test || true' EXIT
-          for i in $(seq 1 60); do curl --fail --silent http://127.0.0.1:8787/ >/dev/null && break; sleep 2; done
-          node scripts/validate-national-http.mjs http://127.0.0.1:8787 || { tail -n 40 /tmp/flowad-worker.log; exit 1; }
-          docker stats --no-stream --format 'OSRM test memory: {{.MemUsage}}; CPU: {{.CPUPerc}}' flowad-road-test
+          trap 'kill -- -"$pid" 2>/dev/null || true; wait "$pid" 2>/dev/null || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:8787/ >/dev/null; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          node scripts/validate-national-http.mjs http://127.0.0.1:8787
           echo 'National data + isolated OSRM + local Workers/D1 verified. No production or vehicle account calls.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Always capture isolated Worker and OSRM diagnostics
+        if: always()
+        run: |
+          if [ -f /tmp/flowad-worker.log ]; then
+            echo '::group::Local Worker log'
+            cat /tmp/flowad-worker.log
+            echo '::endgroup::'
+          fi
+          if docker inspect flowad-road-test >/dev/null 2>&1; then
+            echo '::group::OSRM state, logs and resource usage'
+            docker inspect --format 'status={{.State.Status}} exit={{.State.ExitCode}} oomKilled={{.State.OOMKilled}} error={{.State.Error}}' flowad-road-test
+            docker logs --timestamps flowad-road-test
+            docker stats --no-stream --format 'memory={{.MemUsage}} cpu={{.CPUPerc}} pids={{.PIDs}}' flowad-road-test || true
+            echo '::endgroup::'
+          fi
+      - name: Always remove isolated OSRM
+        if: always()
+        run: |
+          if docker inspect flowad-road-test >/dev/null 2>&1; then docker rm -f flowad-road-test; fi

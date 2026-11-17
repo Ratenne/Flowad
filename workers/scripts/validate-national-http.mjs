@@ -1,19 +1,15 @@
 // Isolated Workers + national OSM + local OSRM integration. No production hosts.
 import assert from 'node:assert/strict';
+import {nationalOrigins} from './national-origins.mjs';
 const origin=new URL(process.argv[2]??'http://127.0.0.1:8787');
 if(origin.protocol!=='http:'||!['localhost','127.0.0.1'].includes(origin.hostname))throw Error('Integration runner accepts loopback only');
 const results=[];
-for(const [city,requestedLatitude,requestedLongitude] of [['서울',37.5665,126.978],['부산',35.1796,129.0756],['대구',35.8714,128.6014],['제주',33.4996,126.5312],['강원',37.6713,128.7063],['저밀도',34.9,126.4]]){
- // Public test origins are explicitly snapped by the isolated OSRM fixture.
- // This does not silently move an actual visitor's origin in the application.
- const snap=await (await fetch('http://127.0.0.1:5000/nearest/v1/driving/'+requestedLongitude+','+requestedLatitude+'?number=1')).json();
- assert.equal(snap.code,'Ok');assert.ok(snap.waypoints[0].distance<1000,'Test origin must be close to a real road');
- const [longitude,latitude]=snap.waypoints[0].location;
+for(const [city,latitude,longitude] of nationalOrigins){
  const start=performance.now();
  const response=await fetch(new URL('/api/recommendations',origin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({requestId:crypto.randomUUID(),originSource:'manual',latitude,longitude,availableMinutes:180,scenery:'all',vehicleType:'ice',walking:false,weather:{condition:'sunny',temperatureC:22,windMps:2,source:'ISOLATED_TEST'}}),signal:AbortSignal.timeout(60000)});
  const data=await response.json();assert.equal(response.status,200,JSON.stringify({city,error:data}));assert.ok(data.courses.length>0,JSON.stringify({city,data}));
  for(const course of data.courses){
-  assert.match(course.id,/^dyn-/);assert.equal(course.route.status,'ROAD_ROUTED');assert.ok(course.estimatedMinutes<=180);
+  assert.match(course.id,/^dyn-/);assert.equal(course.route.status,'ROAD_ROUTED');assert.equal(course.route.provider,'OSRM / OpenStreetMap');assert.ok(course.estimatedMinutes<=180);
   assert.equal(course.route.totalSeconds,course.route.drivingSeconds+course.route.stopSeconds);
   assert.ok(course.route.legs.every(l=>l.geometry?.length>=2));
   assert.ok(course.route.legs.every(l=>l.geometry.every(p=>Number.isFinite(p.latitude)&&Number.isFinite(p.longitude))));
@@ -25,6 +21,7 @@ for(const [city,requestedLatitude,requestedLongitude] of [['서울',37.5665,126.
   const verified=await fetch(new URL('/api/navigation/verify',origin),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket,vehicleType:'ice',availableMinutes:180})});
   assert.equal(verified.status,200);assert.equal((await verified.json()).roadVerified,true);
  }
- const result={city,testOriginSnapMeters:snap.waypoints[0].distance,courses:data.courses.length,geometryPoints:data.courses.reduce((sum,c)=>sum+c.route.legs.reduce((s,l)=>s+l.geometry.length,0),0),elapsedMs:Math.round(performance.now()-start),diagnostics:data.diagnostics};results.push(result);console.log(JSON.stringify(result));
+ const result={city,httpStatus:response.status,courses:data.courses.length,geometryPoints:data.courses.reduce((sum,c)=>sum+c.route.legs.reduce((s,l)=>s+l.geometry.length,0),0),elapsedMs:Math.round(performance.now()-start),diagnostics:data.diagnostics};
+ results.push(result);console.log(JSON.stringify({event:'national_region_verified',...result}));
 }
 console.log('NATIONAL_VALIDATION_JSON='+JSON.stringify({mode:'ISOLATED_WORKER_D1_REAL_NATIONAL_OSRM',results}));

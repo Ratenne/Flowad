@@ -1,0 +1,11 @@
+# Free deployment. National map is baked into the image; no persistent disk.
+services:
+  - type: web
+    name: flowad-roads
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./deploy/osrm/Dockerfile
+    dockerContext: .
+    healthCheckPath: /route/v1/driving/126.978,37.5665;127.0276,37.4979?overview=false
+    autoDeployTrigger: off

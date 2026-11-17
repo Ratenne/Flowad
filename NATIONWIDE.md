@@ -64,6 +64,7 @@ npm ci
 npx wrangler d1 migrations apply flowad --local --config wrangler.local.jsonc
 node scripts/poi-load-public.mjs
 # 격리된 OSRM을 먼저 127.0.0.1:5000에서 실행한다. 운영 URL을 넣지 않는다.
+node scripts/check-national-osrm.mjs http://127.0.0.1:5000
 npx wrangler dev --config wrangler.local.jsonc --port 8787 --var ROAD_ROUTING_URL:http://127.0.0.1:5000
 ```
 

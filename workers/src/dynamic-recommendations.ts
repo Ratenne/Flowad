@@ -12,13 +12,34 @@ function base(env:Env){
  return httpsBase(env.ROAD_ROUTING_URL);
 }
 export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
+ const started=performance.now();let httpStatus:number|null=null,osrmCode:string|null=null;
+ const fail=(reason:string,code='ROAD_TABLE_UNAVAILABLE'):never=>{
+  // Never log URLs, coordinates, provider messages, request bodies or tickets.
+  console.error(JSON.stringify({event:'osrm_table_failure',httpStatus,osrmCode,coordinateCount:points.length,elapsedMs:Math.round(performance.now()-started),reason}));
+  throw new Failure(code,503);
+ };
  const coords=points.map(p=>p.longitude+','+p.latitude).join(';');
- const response=await httpJson(`${base(env)}/table/v1/driving/${coords}?annotations=duration,distance&generate_hints=false&radiuses=${points.map(()=>dynamicPolicy.maxSnapMeters).join(';')}`,{signal},dynamicPolicy.tableMs);
- const data=response.data as {code?:string;message?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
- if(data?.code==='NoSegment')throw new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');
- if(response.status!==200||data?.code!=='Ok')throw new Failure('ROAD_TABLE_UNAVAILABLE',503);
- for(const name of ['durations','distances'] as const){const rows=data[name];if(!Array.isArray(rows)||rows.length!==points.length||rows.some(row=>!Array.isArray(row)||row.length!==points.length||row.some(v=>v!==null&&(!Number.isFinite(v)||v<0))))throw new Failure('INVALID_PROVIDER_RESPONSE',503);}
- if(!data.sources||data.sources.length!==points.length||data.sources.some((s,i)=>!Array.isArray(s.location)||s.location.length!==2||!s.location.every(Number.isFinite)||!Number.isFinite(s.distance)||s.distance>100||distance(points[i].latitude,points[i].longitude,s.location[1],s.location[0])>.15))throw new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');
+ // POI access points are unverified discovery candidates. Ask for their snap
+ // distances in the single Table call, then disconnect unsuitable candidates.
+ // Origins/returns and every final Route retain the strict 100m radius.
+ const url=`${base(env)}/table/v1/driving/${coords}?annotations=duration,distance&generate_hints=false&radiuses=${points.map(p=>p.type==='SCENIC_WAYPOINT'?'unlimited':dynamicPolicy.maxSnapMeters).join(';')}`;
+ let response;
+ try{response=await httpJson(url,{signal},dynamicPolicy.tableMs);}
+ catch(e){return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');}
+ httpStatus=response.status;
+ const data=response.data as {code?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
+ const reasons:Record<string,string>={NoSegment:'no_segment',TooBig:'table_size_limit',InvalidUrl:'invalid_request',InvalidService:'invalid_request',InvalidVersion:'invalid_request',InvalidOptions:'invalid_request',InvalidQuery:'invalid_request',InvalidValue:'invalid_request',NoTable:'no_table',NotImplemented:'unsupported_annotations',Ok:'ok'};
+ osrmCode=typeof data?.code==='string'&&Object.hasOwn(reasons,data.code)?data.code:null;
+ if(response.status!==200||data?.code!=='Ok')return fail(osrmCode&&osrmCode!=='Ok'?reasons[osrmCode]:data===null?'invalid_json':response.status!==200?'http_error':'invalid_response');
+ for(const name of ['durations','distances'] as const){const rows=data[name];if(!Array.isArray(rows)||rows.length!==points.length||rows.some(row=>!Array.isArray(row)||row.length!==points.length||row.some(v=>v!==null&&(typeof v!=='number'||!Number.isFinite(v)||v<0))))return fail('invalid_matrix','INVALID_PROVIDER_RESPONSE');}
+ if(!Array.isArray(data.sources)||data.sources.length!==points.length||data.sources.some(s=>!s||!Array.isArray(s.location)||s.location.length!==2||!s.location.every(Number.isFinite)||Math.abs(s.location[0])>180||Math.abs(s.location[1])>90||!Number.isFinite(s.distance)||s.distance<0))return fail('invalid_snap','INVALID_PROVIDER_RESPONSE');
+ for(let i=0;i<points.length;i++){
+  const s=data.sources[i];
+  if(s.distance<=dynamicPolicy.maxSnapMeters&&distance(points[i].latitude,points[i].longitude,s.location[1],s.location[0])<=.101)continue;
+  if(points[i].type!=='SCENIC_WAYPOINT')return fail('snap_too_far','WAYPOINT_TOO_FAR_FROM_ROAD');
+  // No estimated edges: a rejected point cannot enter any beam-search plan.
+  for(const rows of [data.durations!,data.distances!])for(let j=0;j<points.length;j++){rows[i][j]=null;rows[j][i]=null;}
+ }
  return {durations:data.durations!,distances:data.distances!};
 }
 function attraction(p:Poi){

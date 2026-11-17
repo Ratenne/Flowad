@@ -13,10 +13,10 @@ function base(env:Env){
 }
 export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  const started=performance.now();let httpStatus:number|null=null,osrmCode:string|null=null;
- const fail=(reason:string,code='ROAD_TABLE_UNAVAILABLE'):never=>{
+ const fail=(reason:string,code='ROAD_TABLE_UNAVAILABLE',retryAfterSeconds?:number):never=>{
   // Never log URLs, coordinates, provider messages, request bodies or tickets.
   console.error(JSON.stringify({event:'osrm_table_failure',httpStatus,osrmCode,coordinateCount:points.length,elapsedMs:Math.round(performance.now()-started),reason}));
-  throw new Failure(code,503);
+  throw new Failure(code,503,retryAfterSeconds);
  };
  const coords=points.map(p=>p.longitude+','+p.latitude).join(';');
  // POI access points are unverified discovery candidates. Ask for their snap
@@ -27,6 +27,7 @@ export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  try{response=await httpJson(url,{signal},dynamicPolicy.tableMs);}
  catch(e){return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');}
  httpStatus=response.status;
+ if(response.status===429)return fail('rate_limit','ROAD_PROVIDER_RATE_LIMIT',response.retryAfterSeconds??30);
  const data=response.data as {code?:string;durations?:Array<Array<number|null>>;distances?:Array<Array<number|null>>;sources?:Array<{location:number[];distance:number}>};
  const reasons:Record<string,string>={NoSegment:'no_segment',TooBig:'table_size_limit',InvalidUrl:'invalid_request',InvalidService:'invalid_request',InvalidVersion:'invalid_request',InvalidOptions:'invalid_request',InvalidQuery:'invalid_request',InvalidValue:'invalid_request',NoTable:'no_table',NotImplemented:'unsupported_annotations',Ok:'ok'};
  osrmCode=typeof data?.code==='string'&&Object.hasOwn(reasons,data.code)?data.code:null;

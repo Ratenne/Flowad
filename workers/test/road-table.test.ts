@@ -6,6 +6,14 @@ import {config,external,json} from './helpers';
 const points=[point(0,'ORIGIN','private origin',37.5,127),point(1,'SCENIC_WAYPOINT','candidate',37.501,127.001),point(2,'RETURN','private return',37.5,127)];
 const env=()=>config({ROAD_ROUTING_URL:'https://roads.test'});
 function table(){return {code:'Ok',sources:points.map(p=>({location:[p.longitude,p.latitude],distance:0})),durations:points.map(()=>points.map(()=>10)),distances:points.map(()=>points.map(()=>100))};}
+it('classifies an HTML 429 before JSON parsing and preserves bounded Retry-After',async()=>{
+ const log=vi.spyOn(console,'error').mockImplementation(()=>{});
+ external(()=>new Response('<h1>Too many requests</h1>',{status:429,headers:{'Retry-After':'17'}}));
+ await expect(matrix(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_RATE_LIMIT',status:503,retryAfterSeconds:17});
+ expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({httpStatus:429,reason:'rate_limit'});
+ external(()=>new Response('',{status:429,headers:{'Retry-After':'99999'}}));
+ await expect(matrix(points,env())).rejects.toMatchObject({retryAfterSeconds:300});
+});
 it('disconnects an off-road POI without weakening origin/return or final Route snap limits',async()=>{
  const data=table();data.sources[1].distance=563;data.sources[1].location[1]+=.005;
  external(url=>{expect(new URL(url).searchParams.get('radiuses')).toBe('100;unlimited;100');return json(data);});

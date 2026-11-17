@@ -12,7 +12,7 @@ export function mountRecommendationApi(app:Hono<Bindings>){
  app.post('/api/recommendations',async c=>{
   const raw:unknown=await c.req.json().catch(()=>null),r=recommendation.safeParse(raw);
   if(!r.success)return c.json({error:'Invalid recommendation request'},400);
-  const key=await hash(JSON.stringify(r.data));
+  const key=await hash(JSON.stringify({...r.data,requestId:undefined}));
   if(inFlight.has(key))return c.json(await inFlight.get(key));
   if(inFlight.size>=2)return c.json({error:'RECOMMENDATION_BUSY'},503);
   const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),dynamicPolicy.totalMs);
@@ -20,10 +20,12 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   const pending=(async()=>{
    const lease=nonce();
    const slot=await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=?,expires=? WHERE id=(SELECT id FROM poi_routing_slots WHERE expires<? ORDER BY id LIMIT 1) RETURNING id').bind(lease,now()+60,now()).first<{id:number}>();
-   if(!slot)throw new Failure('RECOMMENDATION_BUSY',503);
+   if(!slot)throw new Failure('RECOMMENDATION_BUSY',503,3);
    try{return await recommend(r.data,c.env,controller.signal);}
    finally{await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=NULL,expires=0 WHERE id=? AND lease=?').bind(slot.id,lease).run();}
   })();inFlight.set(key,pending);
+  // Finish bounded work and release its lease even if the browser disconnects.
+  if(typeof c.executionCtx?.waitUntil==='function')c.executionCtx.waitUntil(pending.then(()=>undefined,()=>undefined));
   try{return c.json(await pending);}finally{clearTimeout(timer);c.req.raw.signal.removeEventListener('abort',cancel);inFlight.delete(key);}
  });
  app.post('/api/navigation/resolve',async c=>{

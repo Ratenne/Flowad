@@ -42,6 +42,9 @@ jobs:
             docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-partition --threads 2 /data/korea.osrm
             docker run --rm -v "$PWD/data/raw:/data" "$image" osrm-customize --threads 2 /data/korea.osrm
           fi
+          # OSRM creates this public graph index as root with mode 0600.
+          # The runner must be able to archive it for the next isolated run.
+          sudo chmod a+r data/raw/korea.osrm.fileIndex
           docker run -d --name flowad-road-test -p 127.0.0.1:5000:10000 -v "$PWD/data/raw:/data:ro" -v "$PWD/deploy/osrm/start.sh:/start.sh:ro" "$image" /bin/sh /start.sh
           node workers/scripts/check-national-osrm.mjs http://127.0.0.1:5000
       - name: Load only the public snapshot into local D1

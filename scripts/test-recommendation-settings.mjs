@@ -29,4 +29,9 @@ assert.equal(context.recommendations.length,1);await get('#applySettings').click
 context.state.settingsDirty=true;const challenged=get('#applySettings').click();assert.equal(requests.length,3);
 requests[2].resolve({ok:false,json:async()=>({error:'ROAD_PROVIDER_CHALLENGE'})});await challenged;
 assert.match(get('#resultStatus').textContent,/보안 검증/);assert.doesNotMatch(get('#resultStatus').textContent,/초 뒤/);assert.equal(context.state.recommendationRetryAt,0);
+let gpsCalls=0,preferredCalls=0;context.locationEnvironment={vehicle:false};context.requestLocation=()=>gpsCalls++;context.requestPreferredLocation=()=>preferredCalls++;
+const heroBinding=source.indexOf("$('#heroLocate').addEventListener");vm.runInContext(source.slice(heroBinding,source.indexOf('});',heroBinding)+3),context);
+context.state.location.kind='gps';get('#heroLocate').click();assert.equal(gpsCalls,0,'Retrying courses must not restart GPS');assert.equal(requests.length,4);
+requests[3].resolve({ok:true,json:async()=>({courses:[]})});await new Promise(setImmediate);
+context.state.location=null;get('#heroLocate').click();assert.equal(preferredCalls,1,'A first request still needs a location');
 console.log('PASS: deferred settings, explicit apply, pending-click deduplication, rate-limit cooldown, explicit retry and provider challenge feedback.');

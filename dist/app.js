@@ -2,6 +2,7 @@ import {createLocationService, validCoordinates} from './location-service.js';
 import {detectLocationEnvironment, locationProvider, createNativeLocationService} from './location-environment.js';
 import {assessBattery} from './battery.js';
 import {weatherAt,departureTimestamp} from './engine.js';
+import {requestWeather,weatherFailureMessage} from './weather-client.js';
 import {courseFromApi,bookmarkTemplate,restoreBookmarks,bookmarkCourse,arrivalTimes} from './dynamic-courses.js';
 let routes=[];
 import {startTeslaLogin} from './tesla-login.js';
@@ -142,7 +143,11 @@ $('#compareRoutes').addEventListener('click',()=>{const list=recommendations.fil
 function saveRoute(id){if(saved.has(id)){saved.delete(id);bookmarks.delete(id);}else{const course=effectiveRoutes().find(r=>r.id===id);if(!course)return;saved.add(id);bookmarks.set(id,bookmarkCourse(course));}let ok=true;try{localStorage.setItem('flowad-bookmarks-v2',JSON.stringify([...bookmarks.values()].map(bookmarkTemplate)))}catch{ok=false}render();if(detailId===id&&$('#detailDialog').open){const b=$('#detailDialog [data-save]');const on=saved.has(id);b.classList.toggle('saved',on);b.setAttribute('aria-pressed',on);b.innerHTML=icon('bookmark')+(on?'저장됨':'저장하기')}toast(ok?(saved.has(id)?'저장한 길에 담았어요.':'저장한 길에서 지웠어요.'):'이번 세션에 저장했어요. 브라우저 보관은 사용할 수 없어요.')}
 function setTab(tab){if(tab==='saved')cancelLocationRequest();state.tab=tab;const list=tab==='saved'?effectiveRoutes().filter(r=>saved.has(r.id)):recommendations;if(list.length&&!list.some(r=>r.id===state.selected))state.selected=list[0].id;render();syncSelection();$('#resultStatus').textContent=tab==='saved'?'이 브라우저에 저장된 코스입니다.':state.location?'현재 위치에서 출발 · 거리·시간 추정':''}
 function weatherFor(r){if(state.weatherSource==='live'){const found=state.forecastIds?.indexOf(r.id)??-1;const index=found+1;const arrival=departureTimestamp($('#departure').value)+(r.route?.legs?.[0]?.durationSeconds??r.km/2/55*3600)*1000;const w=weatherAt(state.forecasts[index],arrival);if(w)return {...w,scope:found>=0?'course':'origin'}}return{weather:state.weather,temp:state.temp,wind:state.wind,severe:false}}
-function paintWeather(){const live=state.weatherSource==='live';setWeatherIcon(state.weather);$('#sceneTemp').textContent=state.temp+'°';$('#sceneWeatherText').textContent=(live?'예보 · ':'예시 · ')+weatherName(state.weather)+' · '+state.wind+'m/s';$('#tempValue').textContent=state.temp+'°C';$('#windValue').textContent=state.wind+'m/s';$('#temperature').value=state.temp;$('#wind').value=state.wind;$$('[data-weather]').forEach(b=>{const on=b.dataset.weather===state.weather;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$('#dataSourceLabel').textContent=live?'Open-Meteo 예보':state.weatherSource==='manual'?'설정한 날씨':state.weatherSource==='loading'?'예보 조회 중 · 예시 날씨':state.weatherSource==='error'?'예보 조회 실패 · 예시 날씨 적용':state.location?.kind==='demo'?'서울 체험 위치 · 예시 날씨':'위치 대기 · 전국 공개 명소 탐색';$('#sourcePill').textContent=live?'예보 반영':state.weatherSource==='loading'?'예보 조회 중':state.location?.kind==='demo'?'체험 코스':state.weatherSource==='manual'?'설정 날씨':'코스 탐색';$('#weatherModeInfo').textContent=live?'출발지와 도착 무렵의 코스 주변 예보를 반영합니다. 직접 바꾸면 시뮬레이션으로 전환합니다.':state.weatherSource==='error'?'예보를 불러오지 못했습니다. 현재 날씨는 예시입니다.':state.weatherSource==='manual'?'직접 설정한 날씨로 추천하고 있습니다.':'현재 위치 확인 후 예보를 조회합니다. 지금은 예시 날씨입니다.';syncSteppers();sceneAPI?.weather(state)}
+function paintWeather(){const live=state.weatherSource==='live';setWeatherIcon(state.weather);$('#sceneTemp').textContent=state.temp+'°';$('#sceneWeatherText').textContent=(live?'예보 · ':'예시 · ')+weatherName(state.weather)+' · '+state.wind+'m/s';$('#tempValue').textContent=state.temp+'°C';$('#windValue').textContent=state.wind+'m/s';$('#temperature').value=state.temp;$('#wind').value=state.wind;$$('[data-weather]').forEach(b=>{const on=b.dataset.weather===state.weather;b.classList.toggle('selected',on);b.setAttribute('aria-pressed',on)});$('#dataSourceLabel').textContent=live?'Open-Meteo 예보':state.weatherSource==='manual'?'설정한 날씨':state.weatherSource==='loading'?'예보 조회 중 · 예시 날씨':state.weatherSource==='error'?'예보 조회 실패 · 예시 날씨 적용':state.location?.kind==='demo'?'서울 체험 위치 · 예시 날씨':'위치 대기 · 전국 공개 명소 탐색';$('#sourcePill').textContent=live?'예보 반영':state.weatherSource==='loading'?'예보 조회 중':state.location?.kind==='demo'?'체험 코스':state.weatherSource==='manual'?'설정 날씨':'코스 탐색';$('#weatherModeInfo').textContent=live?'출발지와 도착 무렵의 코스 주변 예보를 반영합니다. 직접 바꾸면 시뮬레이션으로 전환합니다.':state.weatherSource==='error'?'예보를 불러오지 못했습니다. 현재 날씨는 예시입니다.':state.weatherSource==='manual'?'직접 설정한 날씨로 추천하고 있습니다.':'현재 위치 확인 후 예보를 조회합니다. 지금은 예시 날씨입니다.';syncSteppers();paintWeatherNotice();sceneAPI?.weather(state)}
+function paintWeatherNotice(){
+ if(state.weatherSource==='live'&&state.weatherWarning){$('#dataSourceLabel').textContent=state.weatherWarning;$('#weatherModeInfo').textContent='출발지 예보를 유지합니다. 코스별 예보는 확인하지 못했으므로 출발지 예보를 사용합니다.';}
+ if(state.weatherSource==='error'&&state.weatherError){$('#dataSourceLabel').textContent=state.weatherError+' · 예시 날씨 적용';$('#weatherModeInfo').textContent=state.weatherError+'입니다. 예보 다시 불러오기로 재조회하거나 날씨를 직접 설정할 수 있습니다.';}
+}
 function updateWeather(){state.weatherSource='manual';state.originSevere=false;weatherRequest++;weatherAbort?.abort();paintWeather();updateResults()}
 function openDialog(d){if(state.drivingPreview){toast('정차 화면에서 설정할 수 있어요.');return}$$('dialog[open]').forEach(x=>x.close());d.showModal();document.body.classList.add('modal-open')}
 function showSettings(page='trip'){setSettingsTab(page);openDialog($('#settingsDialog'))}
@@ -251,6 +256,7 @@ function applyLocation(location){
  state.location=location;state.savedPoiIds=undefined;routes=[];state.courseForecastLoaded=false;state.forecastIds=[];
  state.originSevere=false;
  state.forecasts=[];
+ state.weatherError=null;state.weatherWarning=null;
  state.temp=22;
  state.wind=2;
  state.weather='sunny';
@@ -348,7 +354,35 @@ window.addEventListener('pagehide',cancelLocationRequest);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)cancelLocationRequest()});
 $('#locationDialog').addEventListener('close',cancelLocationRequest);
 function applyOriginWeather(){if(!state.forecasts.length)return;const w=weatherAt(state.forecasts[0],departureTimestamp($('#departure').value));if(w){state.temp=w.temp;state.wind=w.wind;state.weather=w.weather;state.originSevere=w.severe}}
-async function loadWeather(){if(!state.location)return;const token=++weatherRequest;weatherAbort?.abort();weatherAbort=new AbortController();const controller=weatherAbort;const timeout=setTimeout(()=>controller.abort(),14000);state.weatherSource='loading';paintWeather();const locations=[{lat:Math.round(state.location.lat*100)/100,lng:Math.round(state.location.lng*100)/100},...routes];const params=new URLSearchParams({latitude:locations.map(p=>p.lat).join(','),longitude:locations.map(p=>p.lng).join(','),hourly:'temperature_2m,wind_speed_10m,weather_code',wind_speed_unit:'ms',timeformat:'unixtime',timezone:'Asia/Seoul',forecast_days:'2'});try{const response=await fetch('https://api.open-meteo.com/v1/forecast?'+params,{signal:controller.signal,referrerPolicy:'no-referrer'});if(!response.ok)throw new Error('Forecast request failed');const payload=await response.json(),forecasts=Array.isArray(payload)?payload:[payload];if(token!==weatherRequest)return;if(!Array.isArray(forecasts)||forecasts.length!==locations.length||forecasts.some(s=>!weatherAt(s,Date.now())))throw new Error('Incomplete forecast response');state.forecasts=forecasts;state.forecastIds=locations.slice(1).map(p=>p.id);state.weatherSource='live';applyOriginWeather();paintWeather();updateResults();paintLocation(state.location);}catch(error){if(token!==weatherRequest)return;state.weatherSource='error';state.forecasts=[];state.originSevere=false;paintWeather();updateResults();paintLocation(state.location);}finally{clearTimeout(timeout)}}
+async function loadWeather(){
+ if(!state.location)return;
+ if(state.weatherSource==='loading'&&weatherAbort&&!weatherAbort.signal.aborted)return;
+ const previous=state.weatherSource==='live'?{forecasts:state.forecasts,ids:state.forecastIds}:null;
+ const token=++weatherRequest;weatherAbort?.abort();weatherAbort=new AbortController();
+ const controller=weatherAbort,timeout=setTimeout(()=>controller.abort(),14000);
+ state.weatherSource='loading';state.weatherError=null;state.weatherWarning=null;paintWeather();
+ const locations=[{lat:Math.round(state.location.lat*100)/100,lng:Math.round(state.location.lng*100)/100},...routes];
+ const params=new URLSearchParams({latitude:locations.map(p=>p.lat).join(','),longitude:locations.map(p=>p.lng).join(','),hourly:'temperature_2m,wind_speed_10m,weather_code',wind_speed_unit:'ms',timeformat:'unixtime',timezone:'Asia/Seoul',forecast_days:'2'});
+ try{
+  const payload=await requestWeather('https://api.open-meteo.com/v1/forecast?'+params,{signal:controller.signal});
+  if(token!==weatherRequest)return;
+  const forecasts=Array.isArray(payload)?payload:[payload];
+  let valid=false;try{valid=forecasts.length===locations.length&&forecasts.every(s=>weatherAt(s,Date.now()));}catch{/* malformed provider arrays */}
+  if(!valid)throw Object.assign(new Error('Invalid forecast'),{code:'WEATHER_INVALID'});
+  state.forecasts=forecasts;state.forecastIds=locations.slice(1).map(p=>p.id);state.weatherSource='live';
+  applyOriginWeather();paintWeather();updateResults();paintLocation(state.location);
+ }catch(error){
+  if(token!==weatherRequest)return;
+  state.weatherError=weatherFailureMessage(error);
+  const origin=previous&&weatherAt(previous.forecasts[0],Date.now());
+  if(origin&&Math.abs(origin.time-Date.now())<=90*60000){
+   state.forecasts=previous.forecasts;state.forecastIds=previous.ids;state.weatherSource='live';
+   state.weatherWarning='코스 예보 조회 실패 · 출발지 예보 적용';applyOriginWeather();
+  }else{state.weatherSource='error';state.forecasts=[];state.forecastIds=[];state.originSevere=false;}
+  paintWeather();updateResults();paintLocation(state.location);
+  paintWeatherNotice();
+ }finally{clearTimeout(timeout);if(weatherAbort===controller)weatherAbort=null;}
+}
 function requestPreferredLocation(){
  const provider=locationProvider(locationEnvironment,$('#locationEnvironment').value);
  if(provider==='native')return requestNativeLocation();
@@ -402,7 +436,7 @@ function initLocationControls(){
   applyLocation({...fix,quality:'APPROXIMATE',userConfirmed:true,label:'대략적인 기기 위치',kind:'gps'});
   $('#locationDialog').close();
  });
- $('#manualLocation').addEventListener('click',()=>{cancelLocationRequest();$('#locationRecovery').textContent='';renderCities();openDialog($('#locationDialog'))});$('#citySearch').addEventListener('input',renderCities);$('#cityChoices').addEventListener('click',e=>{const b=e.target.closest('[data-city]');if(!b)return;const c=departureCities().find(c=>c.name===b.dataset.city);$('#locationDialog').close();applyLocation({lat:c.lat,lng:c.lng,label:c.name,kind:'manual'})});$('#demoBtn').addEventListener('click',()=>{cancelLocationRequest();renderCities();openDialog($('#locationDialog'))});$('#restoreWeather').addEventListener('click',()=>{if(!state.location){toast('먼저 출발 위치를 알려주세요.');return}if(state.forecasts.length){state.weatherSource='live';applyOriginWeather();paintWeather();updateResults()}else loadWeather()});renderCities();paintLocationEnvironment();
+ $('#manualLocation').addEventListener('click',()=>{cancelLocationRequest();$('#locationRecovery').textContent='';renderCities();openDialog($('#locationDialog'))});$('#citySearch').addEventListener('input',renderCities);$('#cityChoices').addEventListener('click',e=>{const b=e.target.closest('[data-city]');if(!b)return;const c=departureCities().find(c=>c.name===b.dataset.city);$('#locationDialog').close();applyLocation({lat:c.lat,lng:c.lng,label:c.name,kind:'manual'})});$('#demoBtn').addEventListener('click',()=>{cancelLocationRequest();renderCities();openDialog($('#locationDialog'))});$('#restoreWeather').addEventListener('click',()=>{if(!state.location){toast('먼저 출발 위치를 알려주세요.');return}if(state.forecasts.length&&!state.weatherError){state.weatherSource='live';applyOriginWeather();paintWeather();updateResults()}else loadWeather()});renderCities();paintLocationEnvironment();
 }
 
 // Tesla: explicit user actions only; no polling or automatic wake.

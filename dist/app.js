@@ -182,6 +182,7 @@ function renderCities(){const query=$('#citySearch').value.trim();const list=dep
 function describeOrigin(location){
  if(location.kind==='gps'){
   const source=location.source==='BROWSER_CACHE'?'최근 기기 위치':'브라우저 위치';
+  if(location.fallbackUsed)return source+' · '+(location.source==='BROWSER_CACHE'?'마지막 측정 위치 사용':'5초 내 확보한 위치 사용')+' · 예상 오차 ±'+Math.round(location.accuracy)+'m · '+new Date(location.observedAt).toLocaleTimeString('ko-KR')+' 측정';
   return source+' · '+(location.quality==='APPROXIMATE'?'사용자가 확인한 대략적인 위치 · ':'위치 확인 완료 · ')+'예상 오차 ±'+Math.round(location.accuracy)+'m';
  }
  if(location.kind==='tesla'||location.kind==='pleos')return '차량 위치 · 위치 정확도 미제공';
@@ -261,7 +262,7 @@ function applyLocation(location){
  state.wind=2;
  state.weather='sunny';
  recommendations=[];
- const lookupAddress=location.quality!=='APPROXIMATE'&&['gps','tesla','pleos'].includes(location.kind)&&!location.addressLabel;
+ const lookupAddress=!location.fallbackUsed&&location.quality!=='APPROXIMATE'&&['gps','tesla','pleos'].includes(location.kind)&&!location.addressLabel;
  location.addressStatus=lookupAddress?'주소 확인 중…':location.quality==='APPROXIMATE'?'대략적인 위치여서 건물 주소를 조회하지 않아요.':location.addressLabel?'차량에서 제공한 주소':null;
  state.weatherSource=location.kind==='demo'?'demo':'loading';
  paintLocation(location);
@@ -299,7 +300,7 @@ async function requestLocation(){
  state.locationRequestKind='browser';
  if(!state.location){$('#locationLabel').textContent='브라우저 위치 확인 중';$('#locationLabel').title='';}
  setLocating(true);
- publishLocationStatus('현재 위치 확인 중… 최대 20초 동안 이 기기의 위치를 측정합니다.'+(state.location?' 기존 출발지와 추천을 유지합니다.':''));
+ publishLocationStatus('현재 위치 확인 중… 최대 5초 측정 후 확보한 위치를 사용합니다.'+(state.location?' 기존 출발지와 추천을 유지합니다.':''));
  if($('#locationDialog').open)$('#locationRecovery').textContent=$('#locationStatus').textContent;
  try{
   const fix=await locationService.request({onProgress:({fix,unstable})=>{

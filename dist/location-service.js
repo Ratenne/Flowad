@@ -1,6 +1,6 @@
 export const nearbyLocationPolicy = Object.freeze({
   highMeters: 20, goodMeters: 50, preciseMeters: 100, maxMeters: 500,
-  maxAgeMs: 15000, maxDurationMs: 20000, stableMs: 3000,
+  maxAgeMs: 15000, maxDurationMs: 5000, stableMs: 3000,
   stagnantMs: 8000, sampleIntervalMs: 1000,
   // Permit road travel, but require another sample after an implausible jump.
   maxSpeedMps: 60, movementSlackMeters: 30
@@ -22,7 +22,7 @@ export function createLocationService({
   geolocation, secure = true, now = Date.now, policy = nearbyLocationPolicy,
   timers = {setTimeout: (fn, ms) => setTimeout(fn, ms), clearTimeout: id => clearTimeout(id)}
 }) {
-  let active = null;
+  let active = null, lastKnown = null;
   const fresh = fix => now() - fix.observedAt >= -1000 && now() - fix.observedAt <= policy.maxAgeMs;
   const error = code => Object.assign(new Error(code), {code});
 
@@ -44,12 +44,17 @@ export function createLocationService({
     const compatible = (a, b) => distanceMeters(a, b) <= a.accuracy + b.accuracy +
       policy.movementSlackMeters + policy.maxSpeedMps * Math.abs(b.observedAt - a.observedAt) / 1000;
 
-    function finish(fix, code) {
+    function finish(fix, code, fallbackUsed = false) {
       if (!running()) return;
       active = null;
       for (const timer of [deadline, settleTimer, retryTimer]) timers.clearTimeout(timer);
       if (watchId !== undefined) geolocation.clearWatch(watchId);
-      if (fix) resolve({...fix, accuracyAccepted: true, userConfirmed: false});
+      if (fix) {
+        // Session memory only. Cancelled samples and vehicle/manual positions
+        // never become the browser's last confirmed location.
+        lastKnown = {...fix};
+        resolve({...fix, accuracyAccepted: !fallbackUsed, userConfirmed: false, fallbackUsed});
+      }
       else {
         const failure = error(code);
         if (['LOW_ACCURACY', 'UNSTABLE'].includes(code) && best && fresh(best)) {
@@ -60,14 +65,12 @@ export function createLocationService({
     }
 
     function endMeasurement() {
-      if (jump) return finish(null, 'UNSTABLE');
       if (best && fresh(best)) {
-        if (best.accuracy <= policy.preciseMeters) {
-          if (samples >= 2 && now() - bestSince >= policy.stableMs) return finish(best);
-          return finish(null, 'UNSTABLE');
-        }
-        return finish(null, 'LOW_ACCURACY');
+        const accepted = !jump && best.accuracy <= policy.preciseMeters &&
+          samples >= 2 && now() - bestSince >= policy.stableMs;
+        return finish(best, undefined, !accepted);
       }
+      if (lastKnown) return finish({...lastKnown, source: 'BROWSER_CACHE'}, undefined, true);
       finish(null, best || sawStale ? 'STALE' : lastError);
     }
 

@@ -195,6 +195,13 @@ context.updateResults();
 assert.equal(recommendationEffects,3);
 assert.equal(statusLookups,0);
 assert.equal(teslaLookups,4);
+const deadlineFallback=vm.runInContext('requestLocation()',context);
+finishFix({...gps,accuracy:1500,observedAt:Date.now(),quality:'LOW',accuracyAccepted:false,fallbackUsed:true,userConfirmed:false});
+await deadlineFallback;
+assert.equal(context.state.location.accuracy,1500);
+assert.equal(context.state.location.fallbackUsed,true);
+assert.equal(addressEffects,1,'A coarse deadline fallback must not request a precise address');
+assert.equal(weatherEffects,4,'The accepted fallback may start weather/recommendation work without a second confirmation');
 console.log('PASS: mocked app progress, preserved results, manual edit/late callbacks, confirmation, recommendations and GPS/Tesla source separation.');
 
 const addressLookups = [];
@@ -253,4 +260,7 @@ const coarseContext = vm.createContext({
 vm.runInContext(slice('function applyLocation(location)', 'function cancelLocationRequest()'), coarseContext);
 vm.runInContext("applyLocation({kind:'gps',quality:'APPROXIMATE',accuracy:500})", coarseContext);
 assert.equal(coarseContext.state.location.addressLabel, undefined);
+vm.runInContext("applyLocation({kind:'gps',quality:'LOW',accuracy:1500,fallbackUsed:true})", coarseContext);
+assert.equal(coarseContext.state.location.addressLabel, undefined);
+assert.match(vm.runInContext("describeOrigin({kind:'gps',source:'BROWSER_CACHE',quality:'LOW',accuracy:1500,fallbackUsed:true,observedAt:Date.now()})", addressContext), /마지막 측정 위치 사용/);
 assert.match(vm.runInContext("describeOrigin({kind:'gps',quality:'APPROXIMATE',accuracy:500})", addressContext), /대략적인 위치/);

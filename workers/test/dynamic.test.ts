@@ -1,6 +1,7 @@
 import {it,expect,vi} from 'vitest';
 import {call,base,config,external,json} from './helpers';
-import {distance} from '../src/utils';
+import {distance,now} from '../src/utils';
+import {dynamicPolicy} from '../src/dynamic-recommendations';
 import {resolve} from '../src/tickets';
 import {nearby} from '../src/poi';
 const cities=[['서울',37.5665,126.978],['부산',35.1796,129.0756],['대구',35.8714,128.6014],['제주',33.4996,126.5312],['강원',37.74,128.75],['저밀도',34.9,126.4]] as const;
@@ -27,6 +28,8 @@ it('shares identical pending conditions across different request IDs',async()=>{
  const gate=new Promise<void>(r=>{release=r;}),started=new Promise<void>(r=>{entered=r;});
  external(async url=>{if(url.includes('/table/')){entered();await gate;}return roads(url);});
  const first=call('/api/recommendations',{...base,requestId:'request-one'},{env:e});await started;
+ const leased=await e.DB.prepare('SELECT expires FROM poi_routing_slots WHERE expires>0').first<{expires:number}>();
+ expect(leased!.expires-now()).toBeGreaterThanOrEqual(Math.ceil(dynamicPolicy.totalMs/1000));
  const second=call('/api/recommendations',{...base,requestId:'request-two'},{env:e});
  await new Promise(r=>setTimeout(r,100));release();
  const responses=await Promise.all([first,second]);expect(responses.map(r=>r.status)).toEqual([200,200]);

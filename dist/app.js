@@ -117,7 +117,7 @@ async function updateResults(){
  if(!state.location){recommendations=[];render();return}
  const controller=new AbortController(); recommendationAbort=controller; const timer=setTimeout(()=>controller.abort(),120000);
  state.recommendationLoading=true;
- recommendations=[];sceneAPI?.clear?.();render();$('#noMatch').hidden=true;$('#resultStatus').textContent='위치 확인 완료 · 추천 코스를 찾고 있어요…';
+ recommendations=[];sceneAPI?.clear?.();render();$('#noMatch').hidden=true;$('#resultStatus').textContent='추천 코스를 찾고 있어요… 도로 서버가 휴면 상태이면 준비에 약 1분이 걸릴 수 있어요.';
  const toWeather=w=>({condition:w.weather,temperatureC:w.temp,windMps:w.wind,severe:!!w.severe,source:state.weatherSource==='live'?(w.scope==='origin'?'Open-Meteo origin forecast':'Open-Meteo forecast'):state.weatherSource==='manual'?'user input':'example',observedAt:w.time?new Date(w.time).toISOString():null});
  const courseWeather=Object.fromEntries(effectiveRoutes().map(r=>[r.id,toWeather(weatherFor(r))]));
  const body={requestId:crypto.randomUUID(),originSource:state.location.kind,roundTrip:$('#tripMode').value!=='oneway',poiIds:state.savedPoiIds,latitude:state.location.lat,longitude:state.location.lng,availableMinutes:+$('#duration').value,scenery:state.mood,vehicleType:state.vehicle,batteryPercent:state.vehicle==='ev'?+$('#battery').value:null,estimatedRangeKm:state.vehicle==='ev'?+$('#range').value:null,weather:toWeather({weather:state.weather,temp:state.temp,wind:state.wind,severe:state.originSevere}),courseWeather,originSevere:!!state.originSevere,walking:$('#walking').checked,departure:$('#departure').value};

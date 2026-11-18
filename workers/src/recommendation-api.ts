@@ -19,7 +19,7 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   const cancel=()=>controller.abort();c.req.raw.signal.addEventListener('abort',cancel,{once:true});if(c.req.raw.signal.aborted)cancel();
   const pending=(async()=>{
    const lease=nonce();
-   const slot=await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=?,expires=? WHERE id=(SELECT id FROM poi_routing_slots WHERE expires<? ORDER BY id LIMIT 1) RETURNING id').bind(lease,now()+60,now()).first<{id:number}>();
+   const slot=await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=?,expires=? WHERE id=(SELECT id FROM poi_routing_slots WHERE expires<? ORDER BY id LIMIT 1) RETURNING id').bind(lease,now()+Math.ceil(dynamicPolicy.totalMs/1000)+15,now()).first<{id:number}>();
    if(!slot)throw new Failure('RECOMMENDATION_BUSY',503,3);
    try{return await recommend(r.data,c.env,controller.signal);}
    finally{await c.env.DB.prepare('UPDATE poi_routing_slots SET lease=NULL,expires=0 WHERE id=? AND lease=?').bind(slot.id,lease).run();}

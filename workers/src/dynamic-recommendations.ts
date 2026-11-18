@@ -1,10 +1,11 @@
 import type {Env,Point,Route} from './types';
-import {distance,Failure,hash,httpJson,httpsBase} from './utils';
+import {distance,Failure,hash,httpsBase} from './utils';
+import {readyTable} from './road-readiness';
 import {nearby,type Poi} from './poi';
 import {finish,point,roadSimplified} from './routing';
 import {issue} from './tickets';
 import {battery,type Input} from './recommendations';
-export const dynamicPolicy=Object.freeze({candidates:20,beamWidth:14,routeChecks:5,results:5,tableMs:8000,totalMs:45000,maxSnapMeters:100,maxDetour:4});
+export const dynamicPolicy=Object.freeze({candidates:20,beamWidth:14,routeChecks:5,results:5,tableMs:8000,totalMs:110000,maxSnapMeters:100,maxDetour:4});
 function base(env:Env){
  if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_PROVIDER_NOT_CONFIGURED',503);
  const u=new URL(env.ROAD_ROUTING_URL);
@@ -24,7 +25,7 @@ export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  // Origins/returns and every final Route retain the strict 100m radius.
  const url=`${base(env)}/table/v1/driving/${coords}?annotations=duration,distance&generate_hints=false&radiuses=${points.map(p=>p.type==='SCENIC_WAYPOINT'?'unlimited':dynamicPolicy.maxSnapMeters).join(';')}`;
  let response;
- try{response=await httpJson(url,{signal},dynamicPolicy.tableMs);}
+ try{response=await readyTable(url,signal,dynamicPolicy.tableMs,env.FREE_PLAN_MODE==='true');}
  catch(e){return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');}
  httpStatus=response.status;
  if(response.challenged)return fail('provider_challenge','ROAD_PROVIDER_CHALLENGE');

@@ -26,6 +26,18 @@ it.each(['NoSegment','NoRoute'])('keeps estimates available but rejects selected
  const fn=external(()=>json({},503));expect((await recommendation(e)).route.status).toBe('ESTIMATED_NOT_ROAD_ROUTED');expect(fn).not.toHaveBeenCalled();
 });
 it('rejects a forged ticket without touching a provider',async()=>{const fn=external(roads);const r=await call('/api/navigation/verify',{ticket:'forged.signature'},{env:config({ROAD_ROUTING_URL:'https://roads.test'})});expect(await r.json()).toMatchObject({roadVerified:false,error:'INVALID_TICKET'});expect(fn).not.toHaveBeenCalled();});
+it.each([429,503,403] as const)('reports provider HTTP %s as a dependency failure, not malformed client input',async status=>{
+ const e=config({ROAD_ROUTING_URL:'https://roads.test'}),c=await recommendation(e);
+ const provider=external(()=>new Response('provider unavailable',{status,headers:{'Retry-After':'17'}}));
+ const r=await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e});
+ expect(r.status).toBe(503);expect(await r.json()).toEqual({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:status===429?'ROAD_PROVIDER_RATE_LIMIT':status===403?'PROVIDER_PERMISSION_DENIED':'PROVIDER_UNAVAILABLE'});
+ expect(r.headers.get('Retry-After')).toBe(status===429?'17':null);expect(provider).toHaveBeenCalledTimes(1);
+});
+it('keeps invalid input as 400 and provider transport failure as 503 without retrying',async()=>{
+ const e=config({ROAD_ROUTING_URL:'https://roads.test'}),c=await recommendation(e),provider=external(()=>{throw Error('connection failed');});
+ const invalid=await call('/api/navigation/verify',{ticket:c.navigationTicket,availableMinutes:0},{env:e});expect(invalid.status).toBe(400);expect(provider).not.toHaveBeenCalled();
+ const failed=await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e});expect(failed.status).toBe(503);expect(await failed.json()).toMatchObject({roadVerified:false,error:'PROVIDER_UNAVAILABLE'});expect(provider).toHaveBeenCalledTimes(1);
+});
 it('keeps the100m snap limit and rejects a selected provider outage',async()=>{const e=config({ROAD_ROUTING_URL:'https://roads.test'}),c=await recommendation(e);external(url=>{const response=roads(url);return response.json().then((v:unknown)=>{const data=v as {waypoints:{distance:number}[]};data.waypoints[0].distance=101;return json(data);});});expect(await(await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e})).json()).toMatchObject({roadVerified:false,error:'WAYPOINT_TOO_FAR_FROM_ROAD'});external(()=>{throw Error('network timeout');});expect(await(await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e})).json()).toMatchObject({roadVerified:false,error:'PROVIDER_UNAVAILABLE'});});
 it('invalidates an old unsent Tesla plan if the next selected verification fails',async()=>{
  const a=await authenticated({},config({TESLA_CLIENT_ID:'public',TESLA_CLIENT_SECRET:'public',TESLA_REDIRECT_URI:'https://flowad.test/api/tesla/callback',ROAD_ROUTING_URL:'https://roads.test'}));

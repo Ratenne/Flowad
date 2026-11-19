@@ -22,15 +22,15 @@ async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords
   if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   let response;
   try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000); }
-  catch { throw new Failure('PROVIDER_UNAVAILABLE'); }
+  catch { throw new Failure('PROVIDER_UNAVAILABLE',503); }
   return response;
 }
-export function roadResponse(points:Point[],response:{status:number;data:unknown;challenged?:boolean},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {
+export function roadResponse(points:Point[],response:{status:number;data:unknown;challenged?:boolean;retryAfterSeconds?:number},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {
   if(response.challenged)throw new Failure('ROAD_PROVIDER_CHALLENGE',503);
-  if(response.status===429)throw new Failure('RATE_LIMIT');
-  if(response.status===403)throw new Failure('PROVIDER_PERMISSION_DENIED');
+  if(response.status===429)throw new Failure('ROAD_PROVIDER_RATE_LIMIT',503,response.retryAfterSeconds??30);
+  if(response.status===403)throw new Failure('PROVIDER_PERMISSION_DENIED',503);
   if(response.status===400){const code=object(response.data).code;throw new Failure(code==='NoSegment'?'WAYPOINT_TOO_FAR_FROM_ROAD':code==='NoRoute'?'NO_ROAD_ROUTE':'INVALID_PROVIDER_RESPONSE');}
-  if(response.status!==200)throw new Failure('PROVIDER_UNAVAILABLE');
+  if(response.status!==200)throw new Failure('PROVIDER_UNAVAILABLE',503);
   // Validate the provider stream's parsed objects in one pass. Avoid cloning every
   // tuple through nested schemas before constructing the public leg geometry.
   const root=object(response.data);if(root.code!=='Ok')throw new Failure('NO_ROAD_ROUTE');

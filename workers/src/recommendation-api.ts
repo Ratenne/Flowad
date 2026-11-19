@@ -35,6 +35,6 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   const parsed=selectedRequest.safeParse(await c.req.json().catch(()=>null));
   if(!parsed.success)return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:'INVALID_REQUEST'},400);
   try{return c.json(await verifySelected(parsed.data,c.env));}
-  catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code},error.status);}
+  catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code},error.status);}
  });
 }

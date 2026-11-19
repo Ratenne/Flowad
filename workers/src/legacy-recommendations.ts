@@ -25,7 +25,7 @@ export async function recommendWithRouting(r: Input, env: Env) {
     if(excluded(r,c)){weatherExcluded++;continue;}
     let result:Route;
     try{if(batched){const value=batched.get(c.id);if(value instanceof Failure)throw value;if(!value)throw new Failure('INVALID_PROVIDER_RESPONSE');result=value;}else result=await route(c.id,r.latitude,r.longitude,r.returnLatitude??r.latitude,r.returnLongitude??r.longitude,15+(r.walking===false?0:c.walk),env);}
-    catch(e){routingFailed++;if(e instanceof Failure&&['PROVIDER_UNAVAILABLE','PROVIDER_PERMISSION_DENIED','RATE_LIMIT'].includes(e.code))break;continue;}
+    catch(e){routingFailed++;if(e instanceof Failure&&['PROVIDER_UNAVAILABLE','PROVIDER_PERMISSION_DENIED','RATE_LIMIT','ROAD_PROVIDER_RATE_LIMIT'].includes(e.code))break;continue;}
     const km=Math.round(result.distanceKm),minutes=Math.ceil(result.totalSeconds/60);
     if(minutes>r.availableMinutes){timeExcluded++;continue;}
     let ws=condition==='sunny'?(temp>=28?.25+.7*c.shade:temp<8?.8-.4*c.exposure-.2*c.altitude:.96-.15*c.shade):condition==='cloudy'?.9-.12*c.altitude:.75-.3*c.altitude-.15*c.exposure;

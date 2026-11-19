@@ -4,11 +4,14 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
  function load(keyId){
   if(sdkPromise)return sdkPromise;
   sdkPromise=new Promise((resolve,reject)=>{
-   const script=doc.createElement('script'),callback='flowadNaverMapReady'+(++loadRevision),previous=win.navermap_authFailure;let settled=false;
-   const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);delete win[callback];if(previous===undefined)delete win.navermap_authFailure;else win.navermap_authFailure=previous;
+   const script=doc.createElement('script'),callback='flowadNaverMapReady'+(++loadRevision),previous=win.navermap_authFailure;let settled=false,readyTimer=null;
+   const finish=(error)=>{if(settled)return;settled=true;clearTimeout(timer);clearTimeout(readyTimer);delete win[callback];if(previous===undefined)delete win.navermap_authFailure;else win.navermap_authFailure=previous;
     if(error){script.remove();reject(Error(error));}else resolve(win.naver.maps);};
    const timer=setTimeout(()=>finish('NAVER_MAP_TIMEOUT'),timeoutMs);
-   win[callback]=()=>win.naver?.maps?.Map?finish():finish('NAVER_MAP_UNAVAILABLE');
+   // The bootstrap callback can run just before Map is exported by the SDK.
+   // Wait within the same deadline; do not issue a second SDK request.
+   const ready=()=>{if(settled)return;if(win.naver?.maps?.Map)finish();else readyTimer=setTimeout(ready,25);};
+   win[callback]=ready;
    win.navermap_authFailure=()=>finish('NAVER_MAP_AUTH_FAILED');
    script.onerror=()=>finish('NAVER_MAP_UNAVAILABLE');
    script.src='https://oapi.map.naver.com/openapi/v3/maps.js?'+new URLSearchParams({ncpKeyId:keyId,callback});

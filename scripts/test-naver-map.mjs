@@ -2,14 +2,15 @@ import assert from 'node:assert/strict';
 import {createNaverMapView} from '../dist/naver-map.js';
 function harness({fetcher,deferSdk=false,failSdk=false,timeoutMs=100}={}){
  const scripts=[],centers=[],status={textContent:''},container={replaceChildren(){}},counts={destroyed:0,markersCleared:0,requests:0};
- const win={naver:{maps:{
+ const listeners=new Map();
+ const win={addEventListener(type,handler){listeners.set(type,handler);},removeEventListener(type){listeners.delete(type);},naver:{maps:{
   LatLng:class{constructor(lat,lng){this.lat=lat;this.lng=lng;}},
   Map:class{constructor(_,options){centers.push({lat:options.center.lat,lng:options.center.lng});}destroy(){counts.destroyed++;}},
   Marker:class{setMap(map){if(map===null)counts.markersCleared++;}}
  }}};
  const doc={createElement(){return {remove(){this.removed=true;}};},head:{append(script){scripts.push(script);if(!deferSdk)queueMicrotask(()=>failSdk?win.navermap_authFailure():win[new URL(script.src).searchParams.get('callback')]());}}};
  const view=createNaverMapView({container,status,win,doc,timeoutMs,fetcher:async(...args)=>{counts.requests++;assert.equal(args[0],'./api/location/map-config');return fetcher?fetcher(...args):{ok:true,json:async()=>({provider:'NAVER',keyId:'public-test-id'})};}});
- return {view,scripts,status,win,centers,counts};
+ return {view,scripts,status,win,centers,counts,listeners};
 }
 const first={lat:37.5,lng:127,kind:'gps'},h=harness();
 assert.equal(h.scripts.length,0);assert.equal(h.counts.requests,0,'No SDK/config request before explicit open');
@@ -22,5 +23,6 @@ const auth=harness({failSdk:true});await auth.view.show(first);assert.match(auth
 const slow=harness({deferSdk:true,timeoutMs:10});await slow.view.show(first);assert.match(slow.status.textContent,/응답이 늦/);assert.equal(slow.scripts[0].removed,true);
 const bootstrap=harness(),maps=bootstrap.win.naver.maps;bootstrap.win.naver.maps={};const booting=bootstrap.view.show(first);await new Promise(setImmediate);bootstrap.win.naver.maps=maps;await booting;assert.equal(bootstrap.centers.length,1,'Wait for the Map export after the bootstrap callback');assert.equal(bootstrap.scripts.length,1);bootstrap.view.close();
 const lateAuth=harness();await lateAuth.view.show(first);lateAuth.win.navermap_authFailure();assert.match(lateAuth.status.textContent,/인증에 실패/);assert.equal(lateAuth.counts.destroyed,1);lateAuth.view.close();assert.equal(lateAuth.win.navermap_authFailure,undefined);
+const rejected=harness();await rejected.view.show(first);rejected.listeners.get('error')({target:{src:'https://oapi.map.naver.com/v3/auth'}});assert.match(rejected.status.textContent,/인증에 실패/);assert.equal(rejected.counts.destroyed,1);assert.equal(rejected.listeners.size,0);
 const closing=harness({deferSdk:true}),loading=closing.view.show(first);await new Promise(setImmediate);closing.view.close();closing.win[new URL(closing.scripts[0].src).searchParams.get('callback')]();await loading;assert.equal(closing.centers.length,0,'Late SDK after close must not recreate a map');
 console.log('PASS: mocked Naver SDK lazy load/reuse, GPS/vehicle coordinates, missing key, auth failure, timeout, close/late response cleanup and no location mutation.');

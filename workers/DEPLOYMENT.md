@@ -31,6 +31,8 @@ DB는 기존 `flowad-workers-stage2`를 그대로 사용한다. 이름의 stage2
 
 ## 다른 서비스
 
+지도 마커는 드래그하거나 지도 클릭으로 이동할 수 있다. 이동 중에는 기존 출발지·추천을 유지하고 주소/추천 API를 호출하지 않는다. ‘이 위치에서 출발’을 누르면 `manual` / `MAP_PICK` 출발지로 적용하고 기존 주소·날씨·추천 흐름을 실행한다. 기기나 차량이 새 위치를 제공한 뒤에는 이전 지도 선택을 확정할 수 없다. 지도 닫기·인증 실패·페이지 이탈 시 선택 상태와 이벤트 리스너를 정리한다.
+
 Naver 키의 발급 서비스도 구분한다. 신규 Maps 키는 `NAVER_MAP_KEY_PARAMETER=ncpKeyId`, 기존 AI·NAVER API의 Web Dynamic Map 키는 `ncpClientId`를 사용한다. 현재 운영 키는 콘솔의 기존 AI·NAVER API 애플리케이션에서 확인했으므로 Wrangler에는 `ncpClientId`를 명시한다. 키 값은 대시보드에만 유지한다. 신규 Maps로 이전할 때는 새 키와 파라미터를 함께 바꾸며, 인증 실패 시 파라미터를 무작위로 재시도하지 않는다.
 
 Render `flowad-roads`는 선택한 코스의 도로 검증용 별도 서비스다. 이 Worker 자동 배포는 Render 설정과 도로 서버 배포 브랜치를 변경하지 않는다. Tesla 공개키를 제공하는 별도 Pages 사이트와 기존 도메인·콜백 주소도 유지한다.

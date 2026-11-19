@@ -1,6 +1,13 @@
 // Load the public map SDK only when the user opens the location map.
-export function createNaverMapView({container,status,fetcher=globalThis.fetch,win=window,doc=document,timeoutMs=10000}){
+export function createNaverMapView({container,status,confirmButton,fetcher=globalThis.fetch,win=window,doc=document,timeoutMs=10000}){
  let sdkPromise=null,map=null,marker=null,revision=0,loadRevision=0,controller=null,authHandler=null,previousAuth=null;
+ let selection=null,eventApi=null;const mapListeners=[];
+ function select(position){
+  const lat=typeof position?.lat==='function'?position.lat():position?.lat,lng=typeof position?.lng==='function'?position.lng():position?.lng;
+  selection=Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=32&&lat<=40&&lng>=124&&lng<=132?{lat,lng}:null;
+  if(confirmButton)confirmButton.disabled=!selection;
+  status.textContent=selection?'마커를 끌거나 지도를 눌러 위치를 고른 뒤 ‘이 위치에서 출발’을 누르세요.':'대한민국 안의 출발 위치를 선택해 주세요.';
+ }
  const authResourceError=event=>{
   try{const url=new URL(event.target?.src);if(url.hostname==='oapi.map.naver.com'&&url.pathname==='/v3/auth')authHandler?.();}catch{/* Ignore unrelated application/resource errors. */}
  };
@@ -23,6 +30,8 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
   return sdkPromise;
  }
  function clear(){
+  selection=null;if(confirmButton)confirmButton.disabled=true;
+  for(const listener of mapListeners)eventApi.removeListener(listener);mapListeners.length=0;eventApi=null;
   win.removeEventListener('error',authResourceError,true);
   if(authHandler&&win.navermap_authFailure===authHandler){if(previousAuth===undefined)delete win.navermap_authFailure;else win.navermap_authFailure=previousAuth;}
   authHandler=null;previousAuth=null;marker?.setMap(null);marker=null;map?.destroy();map=null;container.replaceChildren();
@@ -48,11 +57,16 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
     win.addEventListener('error',authResourceError,true);
     const center=new maps.LatLng(location.lat,location.lng);
     map=new maps.Map(container,{center,zoom:15,zoomControl:true});
-    marker=new maps.Marker({position:center,map,title:'선택한 출발 위치'});
-    status.textContent='선택한 출발 위치입니다. 지도를 움직여도 출발지는 바뀌지 않습니다.';
+    marker=new maps.Marker({position:center,map,title:'끌어서 출발 위치 선택',draggable:true});
+    eventApi=maps.Event;
+    mapListeners.push(eventApi.addListener(marker,'dragstart',()=>{if(current!==revision||!marker)return;selection=null;if(confirmButton)confirmButton.disabled=true;}));
+    mapListeners.push(eventApi.addListener(marker,'dragend',()=>{if(current===revision&&marker)select(marker.getPosition());}));
+    mapListeners.push(eventApi.addListener(map,'click',event=>{if(current!==revision||!marker)return;const position=event.coord??event.latlng;if(!position)return;marker.setPosition(position);select(position);}));
+    select(center);
    }catch(error){if(current!==revision)return;status.textContent=({NAVER_MAP_NOT_CONFIGURED:'네이버 지도가 아직 설정되지 않았습니다.',NAVER_MAP_AUTH_FAILED:'네이버 지도 인증에 실패했습니다. 잠시 후 다시 시도해 주세요.',NAVER_MAP_TIMEOUT:'네이버 지도 응답이 늦습니다. 닫았다가 다시 시도해 주세요.',LOCATION_REQUIRED:'먼저 출발 위치를 확인해 주세요.'})[error.message]||'네이버 지도를 불러오지 못했습니다. 닫았다가 다시 시도해 주세요.';}
    finally{clearTimeout(timer);}
   },
+  getSelection(){return selection?{...selection}:null;},
   close(){revision++;controller?.abort();controller=null;clear();status.textContent='';}
  };
 }

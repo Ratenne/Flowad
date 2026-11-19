@@ -188,6 +188,7 @@ function describeOrigin(location){
  }
  if(location.kind==='tesla'||location.kind==='pleos')return '차량 위치 · 위치 정확도 미제공';
  if(location.kind==='demo')return '체험 모드 · 서울 시청 부근 출발';
+ if(location.source==='MAP_PICK')return '지도에서 직접 선택한 출발 위치';
  return location.label+' 중심 출발';
 }
 function publishLocationStatus(message){
@@ -200,17 +201,28 @@ function paintLocation(location){
  $('#locationLabel').textContent=label;
  $('#locationLabel').title=label;
  const measured=Number.isFinite(location.observedAt)?new Date(location.observedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' 측정':null;
- const coordinates=['gps','tesla','pleos'].includes(location.kind)?'위도 '+location.lat.toFixed(5)+' · 경도 '+location.lng.toFixed(5):null;
+ const coordinates=['gps','tesla','pleos'].includes(location.kind)||location.source==='MAP_PICK'?'위도 '+location.lat.toFixed(5)+' · 경도 '+location.lng.toFixed(5):null;
  publishLocationStatus([describeOrigin(location),measured,coordinates,location.addressStatus,location.addressLabel,weather].filter(Boolean).join(' · '));
- $('#naverMapButton').hidden=location.quality==='APPROXIMATE'||!['gps','tesla','pleos'].includes(location.kind);
+ $('#naverMapButton').hidden=false;
 }
-const naverMapView=createNaverMapView({container:$('#naverMap'),status:$('#naverMapStatus')});
+const naverMapView=createNaverMapView({container:$('#naverMap'),status:$('#naverMapStatus'),confirmButton:$('#confirmMapLocation')});
+let naverMapOrigin=null;
 $('#naverMapButton').addEventListener('click',()=>{
  const location=state.location;
- if(state.drivingPreview||state.locating||!location||!['gps','tesla','pleos'].includes(location.kind))return;
+ if(state.drivingPreview||state.locating||!location)return;
+ naverMapOrigin=location;
  openDialog($('#naverMapDialog'));
  void naverMapView.show(location);
 });
+function applyMapLocation(){
+ const selected=naverMapView.getSelection();
+ if(!selected||state.drivingPreview||state.locating)return;
+ if(naverMapOrigin!==state.location){toast('출발 위치가 바뀌었어요. 지도를 다시 열어 선택해 주세요.');return;}
+ state.settingsDirty=false;
+ $('#naverMapDialog').close();$('#settingsDialog').close();
+ applyLocation({...selected,kind:'manual',source:'MAP_PICK',label:'지도에서 선택한 출발지'});
+}
+$('#confirmMapLocation').addEventListener('click',applyMapLocation);
 $('#naverMapDialog').addEventListener('close',()=>{
  if(!$('#naverMapDialog').open)naverMapView.close();
 });
@@ -261,7 +273,7 @@ function applyLocation(location){
  state.wind=2;
  state.weather='sunny';
  recommendations=[];
- const lookupAddress=!location.fallbackUsed&&location.quality!=='APPROXIMATE'&&['gps','tesla','pleos'].includes(location.kind)&&!location.addressLabel;
+ const lookupAddress=!location.fallbackUsed&&location.quality!=='APPROXIMATE'&&(['gps','tesla','pleos'].includes(location.kind)||location.source==='MAP_PICK')&&!location.addressLabel;
  location.addressStatus=lookupAddress?'주소 확인 중…':location.quality==='APPROXIMATE'?'대략적인 위치여서 건물 주소를 조회하지 않아요.':location.addressLabel?'차량에서 제공한 주소':null;
  state.weatherSource=location.kind==='demo'?'demo':'loading';
  paintLocation(location);

@@ -205,9 +205,11 @@ assert.equal(weatherEffects,4,'The accepted fallback may start weather/recommend
 console.log('PASS: mocked app progress, preserved results, manual edit/late callbacks, confirmation, recommendations and GPS/Tesla source separation.');
 
 const addressLookups = [];
+let mapDraft=null;const confirmedMapOrigins=[];
 const addressContext = vm.createContext({
   state: {location: null}, locationRevision: 0, addressAbort: null,
-  createNaverMapView:()=>({show(){},close(){}}),window:{addEventListener(){}},
+  createNaverMapView:()=>({show(){},close(){},getSelection(){return mapDraft;}}),window:{addEventListener(){}},
+  openDialog(dialog){dialog.open=true;},toast(){},applyLocation(location){confirmedMapOrigins.push(location);addressContext.state.location=location;},
   $: get, AbortController, setTimeout, clearTimeout,
   fetch(url, options) {
     assert.equal(url, './api/location/address');
@@ -216,6 +218,12 @@ const addressContext = vm.createContext({
   }
 });
 vm.runInContext(slice('function describeOrigin(location)', 'function applyLocation(location)'), addressContext);
+const originalMapOrigin={lat:37.5,lng:127,kind:'gps'};addressContext.state.location=originalMapOrigin;
+get('#naverMapButton').click();mapDraft={lat:37.51,lng:127.01};
+assert.equal(addressContext.state.location,originalMapOrigin,'Dragging must not change the current source before confirmation');
+get('#confirmMapLocation').click();assert.equal(confirmedMapOrigins.length,1);assert.equal(confirmedMapOrigins[0].kind,'manual');assert.equal(confirmedMapOrigins[0].source,'MAP_PICK');assert.equal(confirmedMapOrigins[0].lat,37.51);assert.equal(get('#naverMapDialog').open,false);
+get('#naverMapButton').click();addressContext.state.location={lat:35.2,lng:129,kind:'tesla'};get('#confirmMapLocation').click();assert.equal(confirmedMapOrigins.length,1,'A changed origin must invalidate the old map selection');
+assert.match(vm.runInContext("describeOrigin({kind:'manual',source:'MAP_PICK',label:'지도'})",addressContext),/직접 선택/);
 function requestAddress(location) {
   addressContext.state.location = location;
   addressContext.locationRevision++;

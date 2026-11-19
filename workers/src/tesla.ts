@@ -7,6 +7,8 @@ import { AUDIENCE, acceptTokens, configured, hasScope, TeslaClient } from './tes
 import { coordinate, Failure, hash, nonce, now, round } from './utils';
 import { destination } from './routing';
 import {selectedRequest,vehicleConditions,prepareSelected,verifySelection} from './selected-route';
+import {multiCapabilities,multiNavigationOutcome} from './tesla-navigation';
+import {mountTeslaMulti} from './tesla-multi';
 
 const response=z.object({response:z.unknown()});
 function payload(raw:unknown){const parsed=response.safeParse(raw);if(!parsed.success)throw new Failure('INVALID_RESPONSE');return parsed.data.response;}
@@ -27,7 +29,7 @@ function restoreVehicle(s:Session){
   if(s.selected&&Object.hasOwn(s.vehicles,s.selected))return;
   s.selected=Object.keys(s.vehicles).find(id=>s.vehicles[id]===s.lastVehicle);
 }
-function outcome(p: Plan){return {planId:p.id,status:p.status,order:p.attempted,destination:p.stops[p.attempted-1]?.name,vehicleStatus:p.vehicleStatus,requiresVehicleCheck:p.pending,automaticallyVerified:false,...(p.error?{error:p.error}:{}),commandStatus:p.status==='NOT_SENT'?'COMMAND_NOT_SENT':p.status==='API_ACCEPTED'?'COMMAND_SENT':'COMMAND_FAILED',navigationStatus:p.vehicleStatus==='VEHICLE_CONFIRMED'?'NAVIGATION_CONFIRMED':'NAVIGATION_NOT_CONFIRMED',confirmationSource:p.vehicleStatus==='VEHICLE_CONFIRMED'?'USER_REPORTED':'NONE'};}
+function outcome(p: Plan){return {planId:p.id,status:p.status,order:p.attempted,destination:p.stops[p.attempted-1]?.name,vehicleStatus:p.vehicleStatus,requiresVehicleCheck:p.pending,automaticallyVerified:false,...(p.error?{error:p.error}:{}),commandStatus:p.status==='NOT_SENT'?'COMMAND_NOT_SENT':p.status==='API_ACCEPTED'?'COMMAND_SENT':'COMMAND_FAILED',navigationStatus:p.vehicleStatus==='VEHICLE_CONFIRMED'?'NAVIGATION_CONFIRMED':'NAVIGATION_NOT_CONFIRMED',confirmationSource:p.vehicleStatus==='VEHICLE_CONFIRMED'?'USER_REPORTED':'NONE',...multiNavigationOutcome(p)};}
 async function body<T extends z.ZodType>(c: Context,schema:T):Promise<z.infer<T>> {let raw:unknown;try{raw=await c.req.json();}catch{throw new Failure('INVALID_REQUEST');}const r=schema.safeParse(raw);if(!r.success)throw new Failure('INVALID_REQUEST');return r.data;}
 function callbackUri(e: Env){if(!configured(e))throw new Failure('NOT_CONFIGURED',503);let u:URL;try{u=new URL(e.TESLA_REDIRECT_URI!);}catch{throw new Failure('NOT_CONFIGURED',503);}if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.pathname!==`${e.API_PREFIX??''}/api/tesla/callback`)throw new Failure('NOT_CONFIGURED',503);return u.href;}
 export const tesla=new Hono<Bindings>();
@@ -36,7 +38,7 @@ tesla.get('/status',async c=>{
   try{if(!id)throw new Failure('NOT_CONNECTED');lease=await new Sessions(c.env).open(id);}
   catch(e){if(!(e instanceof Failure)||!['NOT_CONNECTED','REAUTH_REQUIRED'].includes(e.code))throw e;id=await new Sessions(c.env).create();lease=await new Sessions(c.env).open(id);}
   const s=lease.data;restoreVehicle(s);await lease.save(true);if(secure(c))setSession(c,id!);
-  return c.json({connection:s.tokens?'CONNECTED':'NOT_CONNECTED',oauthStatus:s.tokens?'OAUTH_CONNECTED':'NOT_CONNECTED',locationReady:secure(c)&&!!(s.tokens&&s.locationGranted&&s.selected&&s.vehicles[s.selected]),navigation:configured(c.env)?'SINGLE_DESTINATION':'NOT_CONFIGURED',csrf:s.csrf,secure:secure(c),message:'전체 경유지 일괄 전송은 미지원입니다. 단일 목적지 교체만 지원합니다.'});
+  return c.json({connection:s.tokens?'CONNECTED':'NOT_CONNECTED',oauthStatus:s.tokens?'OAUTH_CONNECTED':'NOT_CONNECTED',locationReady:secure(c)&&!!(s.tokens&&s.locationGranted&&s.selected&&s.vehicles[s.selected]),navigation:configured(c.env)?'SINGLE_DESTINATION':'NOT_CONFIGURED',csrf:s.csrf,secure:secure(c),...(multiCapabilities(c.env).featureEnabled?{multiNavigation:multiCapabilities(c.env)}:{}),message:'전체 경유지 일괄 전송은 미지원입니다. 단일 목적지 교체만 지원합니다.'});
 });
 // Every authenticated operation is serialized and saved, including error transitions.
 tesla.use('*',async(c,next)=>{
@@ -53,6 +55,7 @@ tesla.use('*',async(c,next)=>{
   } finally {await lease.save(true);}
 });
 function lease(c:Context){return c.get('lease' as never) as Lease;}
+mountTeslaMulti(tesla,{lease,selected,outcome});
 tesla.post('/authorize',async c=>{
   const l=lease(c),s=l.data,uri=callbackUri(c.env),state=nonce();
   // Host-only cookies cannot follow a login from a preview host to production.
@@ -136,7 +139,7 @@ function preview(c: Context,r:Route,text?:string,proofExpiresAt?:number){
   const stops=r.points.slice(1).map((p,i)=>({order:i+1,kind:p.type,name:p.name,latitude:p.latitude,longitude:p.longitude,navigationText:text??`${p.latitude},${p.longitude}`}));
   if(r.status!=='ROAD_ROUTED')throw new Failure('ROAD_ROUTE_REQUIRED');
   s.plan={id:crypto.randomUUID(),vehicle:v,expires:Math.min(now()+300,proofExpiresAt??now()+300),stops,attempted:0,status:'NOT_SENT',vehicleStatus:'VEHICLE_NOT_CONFIRMED',pending:false,roadVerified:true};
-  return {planId:s.plan.id,route:r,stops,mode:'SINGLE_DESTINATION',multiStopStatus:'UNSUPPORTED',status:'NOT_SENT',commandStatus:'COMMAND_NOT_SENT',expiresInSeconds:s.plan.expires-now(),roadVerified:true,verificationStatus:'ROAD_ROUTE_VERIFIED'};
+  return {planId:s.plan.id,route:r,stops,mode:'SINGLE_DESTINATION',multiStopStatus:'UNSUPPORTED',...(multiCapabilities(c.env).featureEnabled?{multiCapabilities:multiCapabilities(c.env)}:{}),status:'NOT_SENT',commandStatus:'COMMAND_NOT_SENT',expiresInSeconds:s.plan.expires-now(),roadVerified:true,verificationStatus:'ROAD_ROUTE_VERIFIED'};
 }
 tesla.post('/navigation/preview',async c=>{
   const s=lease(c).data;if(!configured(c.env))throw new Failure('COMMAND_NOT_CONFIGURED');if(pending(s))return c.json(outcome(s.plan!));
@@ -154,7 +157,8 @@ tesla.post('/navigation/destination/preview',async c=>{
 });
 tesla.post('/navigation/send',async c=>{
   const l=lease(c),s=l.data,input=await body(c,z.object({planId:z.string(),order:z.number().int(),replaceDestination:z.boolean()})),p=s.plan;
-  if(!p||p.id!==input.planId||p.expires<now()||p.vehicle!==selected(s))throw new Failure('PLAN_EXPIRED');
+  if(!p||p.id!==input.planId||p.expires<=now()||p.vehicle!==selected(s))throw new Failure('PLAN_EXPIRED');
+  if(p.mode==='MULTI_STOP')throw new Failure('WRONG_NAVIGATION_MODE');
   if(p.status!=='NOT_SENT')throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');
   if(p.roadVerified!==true)throw new Failure('ROAD_VERIFICATION_REQUIRED');
   if(!input.replaceDestination)throw new Failure(p.stops.length>1?'MULTI_STOP_UNSUPPORTED':'DESTINATION_REPLACEMENT_NOT_CONFIRMED');
@@ -178,5 +182,6 @@ tesla.post('/navigation/send',async c=>{
 tesla.post('/navigation/confirm',async c=>{
   const p=lease(c).data.plan,input=await body(c,z.object({planId:z.string(),order:z.number().int(),matched:z.boolean()}));
   if(!p||p.id!==input.planId||p.attempted!==input.order||!p.pending)throw new Failure('NO_PENDING_COMMAND');
+  if(p.mode==='MULTI_STOP')throw new Failure('WRONG_NAVIGATION_MODE');
   p.pending=false;if(input.matched)p.vehicleStatus='VEHICLE_CONFIRMED';return c.json(outcome(p));
 });

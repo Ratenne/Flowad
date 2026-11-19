@@ -11,6 +11,9 @@
   "assets": { "directory": "../dist", "binding": "ASSETS", "run_worker_first": true },
   "routes": [{ "pattern": "ravirgo.com/flowad*", "zone_name": "ravirgo.com" }],
   "vars": {
+    "TESLA_MULTI_STOP_MODE": "dry-run",
+    "TESLA_MULTI_STOP_SEND_ENABLED": "false",
+    "GOOGLE_PLACE_MAPPING_ENABLED": "true",
     "NAVER_MAP_KEY_PARAMETER": "ncpKeyId",
     "FREE_PLAN_MODE": "true",
     "ROAD_ROUTING_URL": "https://flowad-roads.ravirgo.com",

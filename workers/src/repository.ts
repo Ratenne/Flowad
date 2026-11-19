@@ -29,6 +29,13 @@ export class Lease {
   constructor(private env: Env, public key: string, private owner: string, public data: Session) {}
   async save(release = false) {
     if (this.deleted) return;
+    const plan=this.data.plan;
+    if(plan?.mode==='MULTI_STOP'&&plan.expires<=now()){
+      // Retain the command ledger/pending guard but not expired Google location
+      // metadata in a session that an active user might keep renewing.
+      for(const stop of plan.stops)delete stop.googlePlace;
+      if(plan.multi)plan.multi.ticket='';
+    }
     const r = await this.env.DB.prepare('UPDATE sessions SET ciphertext=?,expires_at=?,lock_owner=?,lock_until=? WHERE id=? AND lock_owner=? AND lock_until>?')
       .bind(await encrypt(this.data, this.env.TOKEN_ENCRYPTION_KEY, this.key), now()+1800, release ? null : this.owner, release ? 0 : now()+120, this.key, this.owner, now()).run();
     if (r.meta.changes !== 1) throw new Failure('SESSION_BUSY', 409);

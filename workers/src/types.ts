@@ -9,6 +9,12 @@ export interface Env {
   TESLA_CLIENT_SECRET?: string;
   TESLA_REDIRECT_URI?: string;
   TESLA_COMMAND_PROXY_URL?: string;
+  TESLA_MULTI_STOP_MODE?: string; // absent/off, dry-run, enabled (explicit consent still required)
+  TESLA_MULTI_STOP_SEND_ENABLED?: string;
+  GOOGLE_PLACES_API_KEY?: string;
+  GOOGLE_PLACE_MAPPING_ENABLED?: string;
+  GOOGLE_PLACES_SEARCH_DAILY_LIMIT?: string;
+  GOOGLE_PLACES_DETAILS_DAILY_LIMIT?: string;
   ROAD_ROUTING_URL?: string;
   // Optional experiment only. No production config enables this adapter.
   OSRM_BATCH_URL?: string;
@@ -22,7 +28,15 @@ export interface Env {
 }
 export type Bindings = { Bindings: Env };
 export interface Coordinate { latitude: number; longitude: number }
+export interface GooglePlaceReference {
+ id:string;source:'GOOGLE_PLACES';verifiedAt:string;identityConfirmed:true;
+ location:Coordinate;matchedPoint:Coordinate&{name:string};
+ verificationMethod?:'MANUAL_REVIEW'|'TEXT_QUERY_UNIQUE_LOCATION';nameVerified?:boolean;
+}
 export interface Point extends Coordinate {
+  googlePlace?:GooglePlaceReference;
+  googlePlaceMappingIssue?:'GOOGLE_PLACE_IDENTITY_UNVERIFIED';
+  poiId?:string;region?:string;poiLocation?:Coordinate;
   order: number; type: string; name: string; source: string;
   verification: string; originalSnapDistanceMeters: number | null;
 }
@@ -32,8 +46,14 @@ export interface Route {
   totalSeconds: number; status: string; provider: string; generatedAt: string;
   geometryStatus: string; terrainStatus: string; warnings: string[];
 }
-export interface Stop extends Coordinate { order: number; kind: string; name: string; navigationText: string }
+export interface Stop extends Coordinate { order: number; kind: string; name: string; navigationText: string;googlePlace?:GooglePlaceReference;googlePlaceMappingIssue?:'GOOGLE_PLACE_IDENTITY_UNVERIFIED' }
 export interface Plan {
+  mode?: 'MULTI_STOP';
+  multi?: {
+    strategy: 'WAYPOINTS' | 'GPS_ORDERED'; ticket: string; itineraryHash: string;
+    dryRunValidated: boolean; attemptedCommands: number; acceptedCommands: number;
+    totalCommands: number | null;
+  };
   roadVerified?: boolean;
   id: string; vehicle: string; expires: number; stops: Stop[]; attempted: number;
   status: 'NOT_SENT' | 'SENDING' | 'API_ACCEPTED' | 'API_FAILED';

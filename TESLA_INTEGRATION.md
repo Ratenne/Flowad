@@ -1,3 +1,7 @@
+# 최신 Workers 다중 경유지 구현
+
+2026-11-19 추가된 전체 경유지 어댑터·Dry-run·플래그 및 미검증 범위는 [Tesla 다중 경유지 구현 기록](TESLA_MULTI_NAVIGATION.md)을 확인하세요. 아래 본문에는 초기 단계의 기록이 포함되어 있으므로 현재 Workers 코드와 위 문서를 우선합니다.
+
 # Tesla Fleet API 조사 및 3단계 진행 상태
 
 후속 구현과 실제 검증 진행은 [도로·실차 검증 기록](TESLA_ROAD_VALIDATION.md)을 참조한다. 아래는 이전 단계 기록이다.

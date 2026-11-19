@@ -5,6 +5,7 @@ import {nearby,type Poi} from './poi';
 import {finish,point} from './routing';
 import {issue} from './tickets';
 import {battery,type Input} from './recommendations';
+import {attachStoredGooglePlace} from './google-place-mapping';
 export const dynamicPolicy=Object.freeze({candidates:20,beamWidth:14,routeChecks:5,results:5,tableMs:8000,totalMs:110000,maxSnapMeters:100,maxDetour:4});
 // Discovery estimates only: never represented as road connectivity or geometry.
 export const discoveryPolicy=Object.freeze({distanceFactor:1.3,speedKmh:45});
@@ -100,7 +101,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  for(const p of candidates)p.attractionScore=attraction(p);
  if(!candidates.length)return empty('WEATHER_UNSAFE','주변 후보가 기상 조건으로 제외됐습니다.');
  const origin=point(0,'ORIGIN','출발지',r.latitude,r.longitude);
- const stopPoints=candidates.map((p,i)=>({...point(i+1,'SCENIC_WAYPOINT',p.name,p.access_latitude,p.access_longitude),source:p.provider,verification:p.access_status,originalSnapDistanceMeters:null}));
+ const stopPoints=candidates.map((p,i)=>attachStoredGooglePlace(p.id,{...point(i+1,'SCENIC_WAYPOINT',p.name,p.access_latitude,p.access_longitude),poiId:p.id,region:p.region,poiLocation:{latitude:p.latitude,longitude:p.longitude},source:p.provider,verification:p.access_status,originalSnapDistanceMeters:null}));
  const returnPoint=point(stopPoints.length+1,r.roundTrip===false?'DESTINATION':'RETURN','복귀 지점',r.returnLatitude??r.latitude,r.returnLongitude??r.longitude);
  const points=[origin,...stopPoints,returnPoint];
  const table=estimatedMatrix(points);

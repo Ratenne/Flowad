@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import type { Env, Session } from './types';
+import type { Env, Session, Stop } from './types';
+import {requireMultiSend,type NavigationStrategy} from './tesla-navigation';
 import type { Lease } from './repository';
 import { Failure, httpJson, httpsBase, now } from './utils';
 export const AUDIENCE='https://fleet-api.prd.na.vn.cloud.tesla.com';
@@ -40,16 +41,32 @@ export class TeslaClient {
     if(new URL(base).pathname!=='/')throw new Failure('NOT_CONFIGURED',503);
     return this.request(base+path,{method:'POST',headers:{Authorization:`Bearer ${await this.access()}`,'Content-Type':'application/json'},body:JSON.stringify(body)},true);
   }
+  multiNavigationCommands(path:string,strategy:NavigationStrategy,stops:Stop[]):ReadonlyArray<()=>Promise<unknown>>{
+    // Serialization is implemented for Dry-run; live transport remains behind
+    // the independent flag and compatibility certification gate.
+    const commands=requireMultiSend(this.env,strategy,stops);
+    if(!/^\/api\/1\/vehicles\/[^/]+$/.test(path))throw new Failure('INVALID_DESTINATION');
+    if(commands.length!==(strategy==='WAYPOINTS'?1:stops.length)||commands.some(c=>c.command!==(strategy==='WAYPOINTS'?'navigation_waypoints_request':'navigation_gps_request')))throw new Failure('UNSUPPORTED_COMMAND');
+    const base=this.env.TESLA_COMMAND_PROXY_URL?httpsBase(this.env.TESLA_COMMAND_PROXY_URL):AUDIENCE;
+    if(new URL(base).pathname!=='/')throw new Failure('NOT_CONFIGURED',503);
+    return commands.map(command=>async()=>this.request(base+path+'/command/'+command.command,{method:'POST',headers:{Authorization:`Bearer ${await this.access()}`,'Content-Type':'application/json'},body:JSON.stringify(command.body)},true));
+  }
   private async request(url: string, init: RequestInit, command=false): Promise<unknown> {
     try {
       const r=await httpJson(url,init,10000),status=r.status,path=new URL(url).pathname;
       if(this.env.SAFE_UPSTREAM_DIAGNOSTICS==='true'){
         // Status-only audit. Never log URL (VIN), query, body, code or tokens.
-        const operation=path.endsWith('/token')?'oauth_token':path==='/api/1/vehicles'?'vehicles':path.endsWith('/vehicle_data_cached')?'reading':path.endsWith('/vehicle_data')?'location':command?'navigation_request':'vehicle_info';
+        const name=path.split('/').at(-1)??'',navigation=['navigation_request','navigation_waypoints_request','navigation_gps_request'].includes(name)?name:'navigation_command';
+        const operation=path.endsWith('/token')?'oauth_token':path==='/api/1/vehicles'?'vehicles':path.endsWith('/vehicle_data_cached')?'reading':path.endsWith('/vehicle_data')?'location':command?navigation:'vehicle_info';
         console.info(JSON.stringify({event:'tesla_upstream_http',operation,httpStatus:status}));
       }
       if(status===401){delete this.lease.data.tokens;this.lease.data.vehicles={};delete this.lease.data.selected;throw new Failure('REAUTH_REQUIRED');}
       if(status===403)throw new Failure('PERMISSION_DENIED');
+      if(command&&status===400&&r.data&&typeof r.data==='object'){
+        const error=(r.data as {error?:unknown}).error;
+        if(error==='invalid_command')throw new Failure('UNSUPPORTED_COMMAND');
+        if(typeof error==='string'&&error.startsWith('Tesla Vehicle Command Protocol required'))throw new Failure('COMMAND_PROTOCOL_REQUIRED');
+      }
       if(status===404)throw new Failure('NO_DATA');
       if(status===412)throw new Failure(path.endsWith('/vehicle_data_cached')?'NO_DATA':'PRECONDITION_FAILED');
       if(status===402)throw new Failure('PAYMENT_REQUIRED');

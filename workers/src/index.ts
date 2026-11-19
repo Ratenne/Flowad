@@ -5,10 +5,11 @@ import {mountRecommendationApi} from './recommendation-api';
 import { tesla } from './tesla';
 import { charging } from './charging';
 import { locations } from './location';
+import {cleanupGooglePlaces} from './google-places';
 const methods:Record<string,'GET'|'POST'>={
   '/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST','/api/navigation/readiness':'POST','/api/charging/recommendations':'POST',
   '/api/location/address':'POST','/api/location/map-config':'GET',
-  ...Object.fromEntries(['status','callback','authorize','disconnect','vehicles','select','reading','location','navigation/preview','navigation/destination/preview','navigation/send','navigation/confirm'].map(p=>['/api/tesla/'+p,p==='status'||p==='callback'?'GET':'POST'])) as Record<string,'GET'|'POST'>
+  ...Object.fromEntries(['status','callback','authorize','disconnect','vehicles','select','reading','location','navigation/preview','navigation/destination/preview','navigation/send','navigation/confirm','navigation/multi/preview','navigation/multi/dry-run','navigation/multi/send','navigation/multi/confirm','navigation/multi/map-places'].map(p=>['/api/tesla/'+p,p==='status'||p==='callback'?'GET':'POST'])) as Record<string,'GET'|'POST'>
 };
 export const app=createApiApp(methods);
 mountRecommendationApi(app);
@@ -42,5 +43,5 @@ export default {
     if(prefix&&u.pathname.startsWith(prefix+'/api/')){u.pathname=u.pathname.slice(prefix.length);request=new Request(u,request);}
     return app.fetch(request,env,ctx);
   },
-  async scheduled(_event:ScheduledController,env:Env){await cleanup(env);}
+  async scheduled(_event:ScheduledController,env:Env){await cleanup(env);await cleanupGooglePlaces(env);}
 } satisfies ExportedHandler<Env>;

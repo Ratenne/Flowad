@@ -1,6 +1,6 @@
 // Load the public map SDK only when the user opens the location map.
 export function createNaverMapView({container,status,fetcher=globalThis.fetch,win=window,doc=document,timeoutMs=10000}){
- let sdkPromise=null,map=null,marker=null,revision=0,loadRevision=0,controller=null;
+ let sdkPromise=null,map=null,marker=null,revision=0,loadRevision=0,controller=null,authHandler=null,previousAuth=null;
  function load(keyId){
   if(sdkPromise)return sdkPromise;
   sdkPromise=new Promise((resolve,reject)=>{
@@ -19,7 +19,10 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
   }).catch(error=>{sdkPromise=null;throw error;});
   return sdkPromise;
  }
- function clear(){marker?.setMap(null);marker=null;map?.destroy();map=null;container.replaceChildren();}
+ function clear(){
+  if(authHandler&&win.navermap_authFailure===authHandler){if(previousAuth===undefined)delete win.navermap_authFailure;else win.navermap_authFailure=previousAuth;}
+  authHandler=null;previousAuth=null;marker?.setMap(null);marker=null;map?.destroy();map=null;container.replaceChildren();
+ }
  return {
   async show(location){
    const current=++revision;controller?.abort();const requestController=new AbortController();controller=requestController;clear();status.textContent='네이버 지도를 불러오는 중입니다.';
@@ -32,6 +35,10 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
     if(!response.ok)throw Error(config.error||'NAVER_MAP_UNAVAILABLE');
     if(config.provider!=='NAVER'||typeof config.keyId!=='string'||!/^[A-Za-z0-9_-]{4,200}$/.test(config.keyId))throw Error('NAVER_MAP_UNAVAILABLE');
     const maps=await load(config.keyId);if(current!==revision)return;
+    // Authentication may complete after the SDK bootstrap and map creation.
+    previousAuth=win.navermap_authFailure;
+    authHandler=()=>{if(current!==revision)return;clear();sdkPromise=null;status.textContent='네이버 지도 인증에 실패했습니다. 잠시 후 다시 시도해 주세요.';};
+    win.navermap_authFailure=authHandler;
     const center=new maps.LatLng(location.lat,location.lng);
     map=new maps.Map(container,{center,zoom:15,zoomControl:true});
     marker=new maps.Marker({position:center,map,title:'선택한 출발 위치'});

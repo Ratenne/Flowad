@@ -1,3 +1,4 @@
+import {resetProviderReadiness} from '../src/navigation-readiness';
 import { beforeEach, afterEach, vi } from 'vitest';
 import { env as bindings } from 'cloudflare:workers';
 import { applyD1Migrations, reset } from 'cloudflare:test';
@@ -6,6 +7,7 @@ import type { Env } from '../src/types';
 interface TestBindings extends Env { TEST_MIGRATIONS: D1Migration[] }
 const env=bindings as unknown as TestBindings;
 beforeEach(async()=>{
+  resetProviderReadiness();
   await applyD1Migrations(env.DB,env.TEST_MIGRATIONS);
   // Hard fail every unmocked outbound request. Tests cannot reach Tesla/OSRM.
   vi.stubGlobal('fetch',vi.fn(()=>{throw new Error('Unmocked external request forbidden');}));

@@ -64,7 +64,7 @@ export function httpsBase(raw: string): string {
   return u.href.replace(/\/+$/, '');
 }
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number; challenged?:boolean }> {
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number; challenged?:boolean;viaRender?:boolean;viaCloudflare?:boolean }> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
@@ -84,7 +84,7 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
     let data: unknown = null; try { data = JSON.parse(new TextDecoder().decode(raw)); } catch { /* Map HTTP status before invalid body. */ }
     const retryAfter=response.headers.get('Retry-After');
     const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):retryAfter?Math.ceil((Date.parse(retryAfter)-Date.now())/1000):NaN;
-    return { status: response.status, data,...(Number.isFinite(seconds)&&seconds>0?{retryAfterSeconds:Math.min(300,seconds)}:{}) };
+    return { status: response.status, data,...(response.status>=400?{viaRender:response.headers.has('x-render-origin-server'),viaCloudflare:response.headers.has('cf-ray')}:{ }),...(Number.isFinite(seconds)&&seconds>0?{retryAfterSeconds:seconds}:{}) };
   } catch (e) { if (e instanceof Failure) throw e; throw new Failure(controller.signal.aborted ? 'UPSTREAM_TIMEOUT' : 'SERVICE_UNAVAILABLE'); }
   finally { clearTimeout(timer); }
 }

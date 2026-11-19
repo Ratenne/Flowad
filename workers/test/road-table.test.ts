@@ -23,13 +23,13 @@ it('preserves challenge classification even when the upstream body has already f
  external(()=>new Response(new ReadableStream({start(controller){controller.error(Error('private upstream error'));}}),{status:429,headers:{'cf-mitigated':'challenge'}}));
  await expect(matrix(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_CHALLENGE',status:503});
 });
-it('classifies an HTML 429 before JSON parsing and preserves bounded Retry-After',async()=>{
+it('classifies an HTML 429 before JSON parsing and respects long Retry-After',async()=>{
  const log=vi.spyOn(console,'error').mockImplementation(()=>{});
  external(()=>new Response('<h1>Too many requests</h1>',{status:429,headers:{'Retry-After':'17'}}));
  await expect(matrix(points,env())).rejects.toMatchObject({code:'ROAD_PROVIDER_RATE_LIMIT',status:503,retryAfterSeconds:17});
  expect(JSON.parse(String(log.mock.calls[0][0]))).toMatchObject({httpStatus:429,reason:'rate_limit'});
  external(()=>new Response('',{status:429,headers:{'Retry-After':'99999'}}));
- await expect(matrix(points,env())).rejects.toMatchObject({retryAfterSeconds:300});
+ await expect(matrix(points,env())).rejects.toMatchObject({retryAfterSeconds:99999});
 });
 it('disconnects an off-road POI without weakening origin/return or final Route snap limits',async()=>{
  const data=table();data.sources[1].distance=563;data.sources[1].location[1]+=.005;

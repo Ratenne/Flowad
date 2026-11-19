@@ -1,3 +1,4 @@
+import {detailAreas} from './terrain-detail.js';
 import {mercator,elevationAt} from './terrain-model.js';
 import {actualRoadPoints} from './course-preview.js';
 const tileCache=new Map(),pendingTiles=new Set();let manifestPromise;
@@ -46,11 +47,15 @@ export async function dynamicTerrain(course){
   if(keys.size>9)throw Error('DEM_COVERAGE_UNAVAILABLE');
   const loaded=await Promise.allSettled([...keys].filter(k=>m.tiles?.[k]).map(async k=>[k,await tile(k,m.tiles[k])]));
   const tiles=new Map(loaded.filter(r=>r.status==='fulfilled').map(r=>r.value));
-  validity=positions.map(([, ,k])=>tiles.has(k));
+  const areas=detailAreas.filter(({bounds:b})=>b[0]<bounds[2]&&b[2]>bounds[0]&&b[1]<bounds[3]&&b[3]>bounds[1]);
+  const captures=(await Promise.allSettled(areas.map(({id})=>readJson('./terrain/'+id+'.json'))))
+   .flatMap(r=>r.status==='fulfilled'&&r.value.courseId&&r.value.grid?.boundsMercator?[r.value]:[]);
+  const sources=positions.map(([x,y,key])=>captures.find(({grid:{boundsMercator:b}})=>x>=b[0]&&x<=b[2]&&y>=b[1]&&y<=b[3])??tiles.get(key));
+  validity=sources.map(Boolean);
   if(!validity.some(Boolean))throw Error('DEM_COVERAGE_UNAVAILABLE');
   status=validity.every(Boolean)?'AVAILABLE':'PARTIAL';
   // Missing samples are masked out by the renderer, never filled with invented terrain.
-  elevations=positions.map(([x,y,k])=>tiles.has(k)?Math.round(elevationAt(tiles.get(k),x,y)*10)/10:0);capturedAt=m.generatedAt;
+  elevations=positions.map(([x,y],i)=>sources[i]?Math.round(elevationAt(sources[i],x,y)*10)/10:0);capturedAt=m.generatedAt;
  }catch{
   // Zero is only a projection plane. The renderer must not draw it as measured terrain.
   status='UNAVAILABLE';validity=undefined;elevations=Array(size*size).fill(0);
@@ -71,8 +76,8 @@ export function poiWindow(course){
   const clusters=projected.map((center,i)=>({indices:projected.map((p,j)=>Math.hypot(p[0]-center[0],p[1]-center[1])*cos<=9000?j:-1).filter(j=>j>=0),distance:Math.hypot(center[0]-mean[0],center[1]-mean[1]),i}));
   clusters.sort((a,b)=>b.indices.length-a.indices.length||a.distance-b.distance||a.i-b.i);indices=clusters[0].indices;
  }
- const anchors=indices.map(i=>({label:points[i].name,order:i+1,coordinate:[points[i].longitude,points[i].latitude]})),road=indices.map(i=>projected[i]);
- const px=road.map(p=>p[0]),py=road.map(p=>p[1]),padding=(indices.length===1?3000:1200)/cos,bounds=[Math.min(...px)-padding,Math.min(...py)-padding,Math.max(...px)+padding,Math.max(...py)+padding];
+ const anchors=indices.map(i=>({label:points[i].name,order:points[i].order??i+1,coordinate:[points[i].longitude,points[i].latitude]})),road=indices.map(i=>projected[i]);
+ const px=road.map(p=>p[0]),py=road.map(p=>p[1]),padding=(indices.length===1?1800:850)/cos,bounds=[Math.min(...px)-padding,Math.min(...py)-padding,Math.max(...px)+padding,Math.max(...py)+padding];
  return {bounds,road,anchors,coverage:{kind:'POI_AREA',fromKm:0,toKm:0,totalKm:0,shownStops:anchors.length,totalStops:points.length,representative:anchors.length<points.length}};
 }
 function unproject([x,y]){return [x/R*180/Math.PI,Math.atan(Math.sinh(y/R))*180/Math.PI];}

@@ -68,7 +68,7 @@ export function mountTeslaMulti(tesla:Hono<Bindings>,deps:Dependencies){
   const input=planInput.parse(await c.req.json()),p=await plan(c,input.planId);
   if(p.status!=='NOT_SENT'||p.pending)throw new Failure('DUPLICATE_OR_UNCONFIRMED_COMMAND');
   const result=navigationDryRun(p.stops,p.multi!.strategy,c.env);p.multi!.dryRunValidated=result.status==='DRY_RUN_VALIDATED';p.multi!.totalCommands=result.commandCount;
-  return {...result,mappingConfigured:!!c.env.GOOGLE_PLACES_KEY&&c.env.GOOGLE_PLACE_MAPPING_ENABLED==='true',mappingResults:p.multi!.mappingResults??[],planId:p.id,mode:p.mode,stops:p.stops,authorizationStatus:'SESSION_SCOPE_ONLY'};
+  return {...result,vehicleSuffix:deps.lease(c).data.vehicles[p.vehicle].slice(-4),mappingConfigured:!!c.env.GOOGLE_PLACES_KEY&&c.env.GOOGLE_PLACE_MAPPING_ENABLED==='true',mappingResults:p.multi!.mappingResults??[],planId:p.id,mode:p.mode,stops:p.stops,authorizationStatus:'SESSION_SCOPE_ONLY'};
  }));
  tesla.post('/navigation/multi/send',operation(async c=>{
   const input=planInput.extend({confirmAllStops:z.literal(true),replaceNavigation:z.literal(true),confirmMappedPlaces:z.boolean().optional()}).parse(await c.req.json()),p=await plan(c,input.planId);

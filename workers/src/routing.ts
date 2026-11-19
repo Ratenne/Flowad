@@ -1,3 +1,4 @@
+import {checkProviderLimit,providerLimited,providerReady} from './navigation-readiness';
 import anchorsData from '../../backend/src/main/resources/anchors.json';
 import type { Env, Leg, Point, Route } from './types';
 import { coordinate, distance, Failure, httpJson, httpsBase, round } from './utils';
@@ -16,11 +17,12 @@ export async function road(points: Point[], env: Env, includeGeometry=env.FREE_P
   }
   const coords = points.map(p=>`${p.longitude},${p.latitude}`).join(';');
   const response=await requestRoad(points,env,includeGeometry,coords,signal);
-  return roadResponse(points,response,includeGeometry);
+  const routed=roadResponse(points,response,includeGeometry);providerReady(env.ROAD_ROUTING_URL);return routed;
 }
 async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords=points.map(p=>`${p.longitude},${p.latitude}`).join(';'),signal?:AbortSignal){
   if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   let response;
+  checkProviderLimit(env.ROAD_ROUTING_URL);
   const started=performance.now();
   try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},25000); }
   catch(e) {
@@ -28,6 +30,7 @@ async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords
     console.warn(JSON.stringify({event:'osrm_route_failure',reason:timeout?'timeout':'connection_failure',elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
     throw new Failure(timeout?'ROAD_PROVIDER_TIMEOUT':'PROVIDER_UNAVAILABLE',503,20);
   }
+  if(!response.challenged&&response.status===429)providerLimited(env.ROAD_ROUTING_URL,response.retryAfterSeconds??30);
   if(response.status!==200)console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
   return response;
 }
@@ -80,6 +83,7 @@ export function routePoints(id:string,lat:number,lng:number,returnLat:number,ret
 export async function verifyCourse(id:string,lat:number,lng:number,returnLat:number,returnLng:number,stopSeconds:number,env:Env):Promise<Route>{
   const {points,warnings}=routePoints(id,lat,lng,returnLat,returnLng);
   const response=await requestRoad(points,env,false),result=roadResponse(points,response,false);
+  if(env.ROAD_ROUTING_URL)providerReady(env.ROAD_ROUTING_URL);
   // roadResponse already validates every location, radius, leg count and value.
   const waypoints=(response.data as {waypoints:{location:[number,number]}[]}).waypoints;
   const snapped=points.map((p,i)=>({...p,latitude:waypoints[i].location[1],longitude:waypoints[i].location[0],source:'OSRM / OpenStreetMap',verification:'PROVIDER_SNAP_ACCESS_UNVERIFIED'}));

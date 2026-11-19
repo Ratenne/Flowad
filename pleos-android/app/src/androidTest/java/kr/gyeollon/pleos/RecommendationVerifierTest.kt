@@ -14,4 +14,7 @@ class RecommendationVerifierTest {
         assertThrows(Exception::class.java) { RecommendationVerifier.parseResolved(response.replace("test", "bad/id")) }
         assertThrows(Exception::class.java) { RecommendationVerifier.parseResolved(response.replace("37.1", "137.1")) }
     }
+    @Test fun rejectsEstimatedRouteForVehicleTransmission() {
+        assertThrows(Exception::class.java) { RecommendationVerifier.parseResolved(response.replace("ROAD_ROUTED", "ESTIMATED_NOT_ROAD_ROUTED")) }
+    }
 }

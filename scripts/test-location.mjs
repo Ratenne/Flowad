@@ -108,7 +108,8 @@ assert.equal(context.state.location,retainedLocation);
 assert.equal(context.recommendations,retainedResults);
 assert.equal(context.state.selected,retainedSelection);
 assert.equal(context.state.tab,retainedTab);
-assert.match(get('#mainLocationStatus').textContent,/±1500m/);
+assert.match(get('#mainLocationStatus').textContent,/출발 위치를 확인/);
+assert.doesNotMatch(get('#mainLocationStatus').textContent,/위도|경도|1500|BROWSER|GPS/);
 assert.equal(pending.length,2,'Progress must not request recommendations');
 const previousStatus=context.state.browserPreviousResultStatus;
 pagehide();
@@ -240,25 +241,24 @@ assert.equal(get('#locationLabel').textContent, '가까운 주소 · 테스트�
 const missingAddress=requestAddress({...gps,kind:'tesla',label:'Tesla 차량 위치',observedAt:Date.now()});
 addressLookups[2]({ok:false,status:503,headers:{get:()=> 'JUSO_NOT_CONFIGURED'}});
 await missingAddress;
-assert.equal(get('#locationLabel').textContent,'Tesla 차량 위치');
-assert.match(get('#mainLocationStatus').textContent,/도로명주소 서비스 승인키가/);
-assert.match(get('#mainLocationStatus').textContent,/좌표로 코스를 추천/);
-assert.match(get('#mainLocationStatus').textContent,/측정/);
+assert.equal(get('#locationLabel').textContent,'현재 위치');
+assert.match(get('#mainLocationStatus').textContent,/차량 위치에서 출발/);
+assert.doesNotMatch(get('#mainLocationStatus').textContent,/승인키|위도|경도|37\.5|127|Tesla/);
 assert.doesNotMatch(get('#mainLocationStatus').textContent,/확인 중/);
 const emptyAddress=requestAddress({...gps,kind:'gps',label:'현재 위치'});
 addressLookups[3]({ok:true,status:204});
 await emptyAddress;
-assert.match(get('#mainLocationStatus').textContent,/등록된 주소가 없어요/);
+assert.match(get('#mainLocationStatus').textContent,/현재 위치에서 출발/);
 const officialAddress=requestAddress({...gps,kind:'gps',label:'현재 위치'});
 addressLookups[4]({ok:true,status:200,json:async()=>({type:'ROAD_ADDRESS',label:'테스트로 1',source:'JUSO_MAP'})});
 await officialAddress;
 assert.equal(get('#locationLabel').textContent,'테스트로 1');
-assert.match(get('#mainLocationStatus').textContent,/도로명주소 서비스 조회 결과/);
+assert.match(get('#mainLocationStatus').textContent,/현재 위치에서 출발/);
 const deniedAddress=requestAddress({...gps,kind:'tesla',label:'Tesla 차량 위치'});
 addressLookups[5]({ok:false,status:503,headers:{get:()=> 'JUSO_KEY_REJECTED'}});
 await deniedAddress;
-assert.equal(get('#locationLabel').textContent,'Tesla 차량 위치');
-assert.match(get('#mainLocationStatus').textContent,/승인키를 확인/);
+assert.equal(get('#locationLabel').textContent,'현재 위치');
+assert.doesNotMatch(get('#mainLocationStatus').textContent,/승인키|JUSO|BROWSER/);
 
 const coarseContext = vm.createContext({
   state:{}, recommendations:[], $:get,
@@ -271,5 +271,5 @@ vm.runInContext("applyLocation({kind:'gps',quality:'APPROXIMATE',accuracy:500})"
 assert.equal(coarseContext.state.location.addressLabel, undefined);
 vm.runInContext("applyLocation({kind:'gps',quality:'LOW',accuracy:1500,fallbackUsed:true})", coarseContext);
 assert.equal(coarseContext.state.location.addressLabel, undefined);
-assert.match(vm.runInContext("describeOrigin({kind:'gps',source:'BROWSER_CACHE',quality:'LOW',accuracy:1500,fallbackUsed:true,observedAt:Date.now()})", addressContext), /마지막 측정 위치 사용/);
+assert.match(vm.runInContext("describeOrigin({kind:'gps',source:'BROWSER_CACHE',quality:'LOW',accuracy:1500,fallbackUsed:true,observedAt:Date.now()})", addressContext), /대략적인 위치/);
 assert.match(vm.runInContext("describeOrigin({kind:'gps',quality:'APPROXIMATE',accuracy:500})", addressContext), /대략적인 위치/);

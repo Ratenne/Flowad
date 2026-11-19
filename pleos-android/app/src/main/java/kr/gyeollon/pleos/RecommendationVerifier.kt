@@ -41,6 +41,7 @@ object RecommendationVerifier {
         val result = JSONObject(response)
         require(result.getString("courseId").matches(Regex("[a-z0-9-]{1,64}")))
         val route = result.getJSONObject("route")
+        require(route.getString("status") == "ROAD_ROUTED") { "실제 도로 확인이 필요합니다" }
         val arr = route.getJSONArray("points")
         require(arr.length() in 2..RouteGuard.MAX_ROUTE_POINTS)
         val points = (0 until arr.length()).map { i ->

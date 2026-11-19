@@ -108,10 +108,11 @@ it('keeps severe-weather, walking, scenery and EV conditions on dynamic candidat
  for(const c of data.courses){expect(c.batteryStatus).toBe('CHARGING_MAY_BE_NEEDED');expect(c.stopMinutes).toBe(c.waypoints.length*10);expect(c.route.points.at(-1)?.type).toBe('DESTINATION');}
 });
 it('revalidates signed dynamic coordinates for vehicle preview without catalog IDs',async()=>{
- await seed();mockRoads();const e=config({ROAD_ROUTING_URL:'https://roads.test'});
+ await seed();const roads=mockRoads(),e=config({ROAD_ROUTING_URL:'https://roads.test'});
  const data=await(await call('/api/recommendations',base,{env:e})).json() as {courses:Array<{navigationTicket:string;id:string}>};
  const r=await call('/api/navigation/verify',{ticket:data.courses[0].navigationTicket,vehicleType:'ice',availableMinutes:180},{env:e});
  expect(r.status).toBe(200);const body=await r.json() as {roadVerified:boolean;navigationTicket:string};expect(body.roadVerified).toBe(true);expect((await resolve(body.navigationTicket,e.NAVIGATION_TICKET_SECRET)).courseId).toBe(data.courses[0].id);
+ expect(roads).toHaveBeenCalledTimes(1);const url=new URL(String(roads.mock.calls[0][0]));expect(url.searchParams.get('steps')).toBe('false');expect(url.searchParams.get('overview')).toBe('false');
 });
 it('discovers without any configured road provider and never invents road geometry',async()=>{
  await seed();const provider=external(()=>{throw Error('No external requests allowed');}),e=config({ROAD_ROUTING_URL:''});

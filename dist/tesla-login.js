@@ -27,8 +27,6 @@ export async function startTeslaLogin(button, authorize, onError) {
   const timeout = setTimeout(() => controller.abort(), 20000);
   window.addEventListener('pageshow', reset);
   try {
-    // Let the loading screen paint even when the authorize response is fast.
-    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const {url} = await authorize(controller.signal);
     location.assign(url);
   } catch (error) {

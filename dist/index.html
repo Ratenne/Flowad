@@ -13,9 +13,11 @@
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./cockpit.css">
   <link rel="stylesheet" href="./tesla-login.css">
+  <link rel="stylesheet" href="./discovery.css">
 </head>
 
 <body>
+  <div id="appBootStatus" role="status" aria-live="polite">드라이브 코스를 준비하고 있어요.</div>
   <svg class="svg-defs" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <symbol id="i-route" viewBox="0 0 24 24">
@@ -135,12 +137,12 @@
         <div class="quick-controls">
           <div class="time-budget" role="group" aria-label="왕복 가능 시간"><button data-duration="180" class="selected"
               aria-pressed="true">3시간</button><button data-duration="300" aria-pressed="false">5시간</button><button
-              data-duration="480" aria-pressed="false">하루</button></div><button id="quickSettings" class="quick-filter"
+              data-duration="480" aria-pressed="false">하루</button></div><button id="quickSettings" class="quick-filter" hidden
             aria-label="추천 조건 설정"><svg>
               <use href="#i-settings" />
             </svg></button>
         </div>
-        <div id="locationEmpty" class="start-state"><button id="emptyLocate" class="button-primary"><svg>
+        <div id="locationEmpty" class="start-state"><button id="emptyLocate" class="button-primary" hidden><svg>
               <use href="#i-location" />
             </svg><span id="emptyLocateLabel">이 기기 위치에서 추천</span><svg class="arrow">
               <use href="#i-arrow" />
@@ -148,6 +150,7 @@
               <use href="#i-arrow" />
             </svg></button><small id="catalogStatus">전국 공개 명소를 출발지에서 도로로 연결합니다.</small></div>
         <button id="compareRoutes" type="button" class="button-secondary" hidden disabled>선택 코스 비교</button>
+        <button id="refreshRecommendations" type="button" class="button-secondary" hidden>주변 코스 다시 찾기</button>
         <div id="routeCards" class="route-cards" hidden></div>
         <div id="emptyState" class="empty-state" hidden><svg>
             <use href="#i-bookmark" />
@@ -175,6 +178,7 @@
           </div>
         </header>
         <div class="landscape" id="landscape">
+          <div id="courseFallback" class="course-fallback" hidden></div>
           <div id="canvasWrap">
             <div id="sceneLoading" class="scene-loading">오늘의 길을 펼치는 중</div><canvas id="terrainCanvas"
               aria-label="드래그해서 둘러보는 코스 3D 모형"></canvas>
@@ -185,6 +189,8 @@
             </svg></div>
         </div>
         <div class="map-toolbar">
+          <button id="terrainRetry" type="button" class="button-secondary" hidden>미리보기 다시 불러오기</button>
+          <button id="previewMode" type="button" class="button-secondary" hidden>전체 경유지 보기</button>
           <span class="scene-credit">실제 고도 데이터 · 경유지 하이라이트 구간</span>
           <div class="map-tools">
             <button id="resetView" aria-label="지도 시점 초기화"><svg>
@@ -195,6 +201,12 @@
               </svg><span class="tour-label">미리 달리기</span></button>
           </div>
         </div>
+      </section>
+      <section id="visualComparison" class="visual-comparison" aria-label="선택 코스 시각 비교" hidden>
+        <div><p class="overline">COURSE COMPARE</p><h2>어떤 풍경으로 떠날까요?</h2></div>
+        <div id="comparisonTabs" class="comparison-tabs" role="group" aria-label="비교할 코스 전환"></div>
+        <p id="comparisonSummary" aria-live="polite"></p>
+        <div class="comparison-actions"><button id="leaveComparison" type="button" class="button-secondary">추천 목록으로</button><button id="chooseComparedCourse" type="button" class="button-primary">이 코스로 결정</button></div>
       </section>
       <section class="drive-summary" id="driveSummary" hidden aria-label="주행 화면 미리보기"><span class="drive-mode-tag">주행 UI
           미리보기</span>
@@ -299,7 +311,7 @@
           <p class="access-url">https://ravirgo.com/flowad/</p>
           <div class="access-actions"><button type="button" id="copyAppLink" class="button-secondary">주소
               복사</button><button type="button" id="shareAppLink" class="button-secondary">휴대폰에서 공유</button></div>
-          <p id="accessStatus" role="status">공유 메뉴의 Tesla 선택 및 차량 브라우저 열기는 기기와 앱 버전에 따라 지원 여부를 확인해야 합니다.</p>
+          <p id="accessStatus" role="status">차량 브라우저 지원 여부를 확인하고 정차 중 열어 주세요.</p>
           <details>
             <summary>전체화면 허브 이용 안내</summary>
             <p>외부 허브의 사용자 URL 등록 및 전체화면 지원은 미검증입니다. 차량과 소프트웨어에 따라 동작이 다를 수 있습니다. 이용 전 해당 서비스의 개인정보 처리와 신뢰성을 확인하세요. Tesla
@@ -309,16 +321,18 @@
                 target="_blank" rel="noopener noreferrer">TesTube 열기</a></div>
           </details>
         </section>
-        <div class="vehicle-note">
+        <label class="setting-row" for="vehicleIntegration"><span>차량 연결 방식</span><select id="vehicleIntegration"><option value="none">연동 없이 사용</option><option value="tesla">Tesla</option><option value="pleos">Pleos 지원 차량</option><option value="other">기타 차량</option></select></label>
+        <p id="integrationNotice" class="settings-note" role="status">차량 연결 없이도 코스를 고르고 저장할 수 있어요.</p>
+        <div id="teslaIntegrationPanel" class="vehicle-note" hidden>
           <div><strong>Tesla 차량 연결</strong>
             <p id="teslaStatus" role="status">연결 상태 확인 중</p>
-            <label style="display: none;">
+            <label>
               <input type="checkbox" id="teslaLocationConsent"> 차량 위치 사용 동의 (선택)
             </label>
             <p style="display: none;">차량 위치는 Tesla에서 직접 조회하며 브라우저 GPS와 별개입니다. 위치 사용에 동의해 로그인하고 차량을 선택한 뒤 차량 위치 조회를 누르면, 차량이 있는 곳을 출발지로 추천합니다.
               브라우저 위치에서 자동 전환하지 않습니다.</p>
             <p>차량 조회·전송에는 Tesla 요금이 발생할 수 있습니다. 코스 상세에서 단일 목적지 교체를 선택할 수 있습니다.</p>
-            <label style="display: none;">
+            <label>
               <input type="checkbox" id="teslaCommandConsent"> 내비 목적지 전송 권한 요청
             </label>
             <p>출발 위치는 도로 경로 서버로, 선택한 목적지는 Tesla로 전송합니다.</p><button id="teslaConnect" class="button-secondary">Tesla
@@ -459,7 +473,7 @@
       id="temperature" min="-5" max="38" value="22" tabindex="-1"><input type="range" id="wind" min="0" max="16"
       value="2" tabindex="-1"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./boot.js"></script>
 </body>
 
 </html>

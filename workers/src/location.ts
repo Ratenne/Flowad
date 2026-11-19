@@ -24,9 +24,13 @@ locations.post('/juso-map',async c=>{
   else if(!c.env.JUSO_MAP_API_KEY||! /^[A-Za-z0-9._+/=-]+$/.test(c.env.JUSO_MAP_API_KEY)){status=503;body='<p>공식 주소 지도를 사용할 수 없어요.</p>';}
   else{
     const [x,y]=proj4('+proj=longlat +datum=WGS84 +no_defs','+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs',[lon,lat]);
-    const q=new URLSearchParams({confmKey:c.env.JUSO_MAP_API_KEY,searchType:'1',pointX:String(x),pointY:String(y),skinType:'2'});
-    body=`<div id="mapWrap" class="mapWrap" style="width:100%;height:100%"></div><script src="${escapeHtml('https://business.juso.go.kr/juso_support_center/js/addrlink/map/jusoro_map_api.min.js?'+q)}"></script>`;
+    // The official SDK extracts confmKey literally, then encodes it for JSONP.
+    // URLSearchParams here would encode +/= twice and fail key approval.
+    const q=new URLSearchParams({searchType:'1',pointX:String(x),pointY:String(y),skinType:'2'});
+    body=`<div id="mapWrap" class="mapWrap" style="width:100%;height:100%"><form id="AKCFrm" name="AKCFrm"><p role="status">공식 주소 지도를 불러오는 중입니다.</p></form></div><script src="${escapeHtml('https://business.juso.go.kr/juso_support_center/js/addrlink/map/jusoro_map_api.min.js?confmKey='+c.env.JUSO_MAP_API_KEY+'&'+q)}"></script>`;
   }
   c.header('Content-Security-Policy',"sandbox allow-scripts; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");c.header('Referrer-Policy','strict-origin');
+  // Keep edge RUM injection out of this opaque-origin sandbox document.
+  c.header('Cache-Control','no-store, no-transform');
   return c.html(`<!doctype html><html lang="ko" style="height:100%"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>공식 주소 지도</title></head><body style="height:100%;margin:0">${body}</body></html>`,status);
 });

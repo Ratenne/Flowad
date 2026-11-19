@@ -47,5 +47,10 @@ it('bounds upstream responses, rejects redirects and handles unavailable and tim
 it('keeps Juso form HTML, EPSG:5179 conversion, escaping and sandbox without making an HTTP call',async()=>{
   const worker=(await import('../src/index')).default;
   const r=await worker.fetch(new Request('https://flowad.test/api/location/juso-map',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'latitude=38&longitude=127.5'}),config({JUSO_MAP_API_KEY:'test+key='}),{} as ExecutionContext);
-  expect(r.status).toBe(200);expect(r.headers.get('Content-Security-Policy')).toContain('sandbox allow-scripts');const html=await r.text();expect(html).toContain('confmKey=test%2Bkey%3D');expect(html).toContain('&amp;searchType=1&amp;pointX=1000000&amp;pointY=2000000');
+  expect(r.status).toBe(200);expect(r.headers.get('Content-Security-Policy')).toContain('sandbox allow-scripts');expect(r.headers.get('Cache-Control')).toBe('no-store, no-transform');const html=await r.text();expect(html).toContain('confmKey=test+key=');expect(html).toContain('&amp;searchType=1&amp;pointX=1000000&amp;pointY=2000000');
+  expect(html).toContain('<form id="AKCFrm" name="AKCFrm">');expect(html.indexOf('name="AKCFrm"')).toBeLessThan(html.indexOf('<script src='));
+  const src=html.match(/<script src="([^"]+)/)![1].replaceAll('&amp;','&');
+  // Match the official SDK's literal extraction, followed by jQuery encoding.
+  const sdkKey=src.match(/[?&]confmKey=([^&]+)/)![1];
+  expect(new URLSearchParams(new URLSearchParams({confmKey:sdkKey}).toString()).get('confmKey')).toBe('test+key=');
 });

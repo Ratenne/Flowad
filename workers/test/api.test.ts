@@ -65,6 +65,6 @@ describe('API contracts and recommendation engine in workerd',()=>{
     const r=await route('yangpyeong',37.5665,126.978,37.5665,126.978,15,config()),ticket=await issue('yangpyeong',r,config().NAVIGATION_TICKET_SECRET),[p,s]=ticket.split('.');
     const raw=JSON.parse(new TextDecoder().decode(from64(p)));raw.courseId='tampered';await expect(resolve(`${url64(bytes(JSON.stringify(raw)))}.${s}`,config().NAVIGATION_TICKET_SECRET)).rejects.toMatchObject({code:'INVALID_TICKET'});
     raw.expiresAt=now()-1;const payload=bytes(JSON.stringify(raw)),signature=await crypto.subtle.sign('HMAC',await hmacKey(config().NAVIGATION_TICKET_SECRET),payload);
-    await expect(resolve(`${url64(payload)}.${url64(signature)}`,config().NAVIGATION_TICKET_SECRET)).rejects.toMatchObject({code:'INVALID_TICKET'});
+    await expect(resolve(`${url64(payload)}.${url64(signature)}`,config().NAVIGATION_TICKET_SECRET)).rejects.toMatchObject({code:'TICKET_EXPIRED'});
   });
 });

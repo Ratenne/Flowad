@@ -109,12 +109,17 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  for(let depth=0;depth<3;depth++){
   const expanded:Plan[]=[];
   for(const previous of beam)for(let j=1;j<=candidates.length;j++){
+   if(r.poiIds&&candidates[j-1].id!==r.poiIds[depth])continue;
    if(previous.indices.includes(j))continue;
    const from=previous.indices.at(-1)??0,d=table.durations[from][j],m=table.distances[from][j];
    const back=roundTrip?table.durations[j][end]:0,backMeters=roundTrip?table.distances[j][end]:0;
    if(d===null||m===null||back===null||backMeters===null)continue;
    if(previous.indices.some(k=>distance(points[k].latitude,points[k].longitude,points[j].latitude,points[j].longitude)<.15))continue;
    const indices=[...previous.indices,j],seconds=previous.seconds+d,meters=previous.meters+m;
+   // Keep the outward itinerary heading toward its final destination instead
+   // of using needless out-and-back detours to fill the requested duration.
+   const outwardDirect=distance(r.latitude,r.longitude,points[j].latitude,points[j].longitude)*1000*discoveryPolicy.distanceFactor;
+   if(!r.poiIds&&meters>Math.max(5000,outwardDirect*2))continue;
    if(seconds+back+indices.length*(r.walking===false?600:1200)>r.availableMinutes*60)continue;
    const selected=indices.map(i=>candidates[i-1]);
    const score=evaluate(r,selected,seconds+back,meters+backMeters).score;
@@ -126,6 +131,9 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  const unique=new Set<string>();
  plans=plans.sort((a,b)=>b.score-a.score).filter(p=>{const key=[...p.indices].sort().join(',');if(unique.has(key))return false;unique.add(key);return true;});
  if(r.poiIds)plans=plans.filter(p=>p.indices.length===r.poiIds!.length);
+ // A drive needs a through point as well as a destination. Keep the entire
+ // candidate pool and single-stop alternatives when no multi-stop plan fits.
+ if(!r.poiIds&&plans.some(p=>p.indices.length>=2))plans=plans.filter(p=>p.indices.length>=2);
  const selected:Plan[]=[];
  const similarity=(a:Plan,b:Plan)=>{
   const pa=candidates[a.indices[0]-1],pb=candidates[b.indices[0]-1];
@@ -144,8 +152,8 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
   const id='dyn-'+(await hash(pois.map(p=>p.id).join('|')+(roundTrip?'|round':'|oneway'))).slice(0,24);
   if(unsafe(r,pois,id)){weatherExcluded++;continue;}
   const routePoints:Point[]=[{...origin},...plan.indices.map(i=>({...points[i]}))];
+  routePoints[routePoints.length-1]={...routePoints.at(-1)!,type:'DESTINATION'};
   if(roundTrip)routePoints.push({...returnPoint});
-  else routePoints[routePoints.length-1]={...routePoints.at(-1)!,type:'DESTINATION'};
   routePoints.forEach((p,i)=>p.order=i);
   const legs=routePoints.slice(1).map((_,i)=>{const a=plan.indices[i-1]??0,b=plan.indices[i]??end;return {fromOrder:i,toOrder:i+1,distanceKm:table.distances[a][b]/1000,durationSeconds:Math.ceil(table.durations[a][b]),geometry:null};});
   const route:Route=finish(routePoints,{legs,status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'GEOGRAPHIC_ESTIMATE',geometryStatus:'NOT_AVAILABLE'},pois.length*(r.walking===false?600:1200),'UNAVAILABLE',[
@@ -165,6 +173,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
    reasons:['현재 위치 주변 POI와 추정 이동시간으로 구성했어요.',`정차 ${route.stopSeconds/60}분을 별도로 반영했어요.`,...warnings],
    estimatedRoundTripKm:route.distanceKm,estimatedMinutes:Math.ceil(route.totalSeconds/60),drivingMinutes:Math.ceil(route.drivingSeconds/60),stopMinutes:route.stopSeconds/60,
    waypoints:pois.map(p=>({id:p.id,name:p.name,latitude:p.latitude,longitude:p.longitude,accessLatitude:p.access_latitude,accessLongitude:p.access_longitude,accessStatus:p.access_status,accessKind:p.access_kind,description:p.description??'',source:p.provider,sourceUpdatedAt:p.source_updated_at})),
+   origin:routePoints[0],scenicWaypoints:routePoints.filter(p=>p.type==='SCENIC_WAYPOINT'),destination:routePoints.find(p=>p.type==='DESTINATION'),returnPoint:roundTrip?routePoints.at(-1):null,
    distanceTimeStatus:route.status,batteryStatus:status,vehicleTransferAllowed:false,vehicleTransferCondition:'ROAD_VERIFICATION_THEN_EXPLICIT_USER_APPROVAL_REQUIRED',
    dataSource:{course:sources.join(' + '),distanceTime:route.provider,weather:(r.courseWeather?.[id]??r.weather)?.source??'예시 날씨',weatherObservedAt:(r.courseWeather?.[id]??r.weather)?.observedAt??null,generatedAt:route.generatedAt,attribution:'© OpenStreetMap contributors (ODbL); 한국관광공사 TourAPI (해당 자료)'},
    route,navigationTicket:await issue(id,route,env.NAVIGATION_TICKET_SECRET)});

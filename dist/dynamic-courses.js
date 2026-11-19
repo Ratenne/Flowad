@@ -8,7 +8,7 @@ export function arrivalTimes(course,departure){
  let time=departure;
  const stopSeconds=(course.route?.stopSeconds??0)/Math.max(1,course.waypoints?.length??0);
  return (course.route?.points??[]).map((p,i)=>{
-  if(i){time+=(course.route.legs?.[i-1]?.durationSeconds??0)*1000;if(course.route.points[i-1].type==='SCENIC_WAYPOINT')time+=stopSeconds*1000;}
+  if(i){time+=(course.route.legs?.[i-1]?.durationSeconds??0)*1000;if(['SCENIC_WAYPOINT','DESTINATION'].includes(course.route.points[i-1].type))time+=stopSeconds*1000;}
   return time;
  });
 }

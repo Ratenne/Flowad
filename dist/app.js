@@ -4,6 +4,7 @@ import {assessBattery} from './battery.js';
 import {weatherAt,departureTimestamp} from './engine.js';
 import {requestWeather,weatherFailureMessage} from './weather-client.js';
 import {createNaverMapView} from './naver-map.js';
+import {waitForRoadService} from './navigation-readiness.js';
 import {previewMarkup,actualRoadPoints} from './course-preview.js';
 import {connectionSection,integrations} from './ux-presentation.js';
 import {courseFromApi,bookmarkTemplate,restoreBookmarks,bookmarkCourse,arrivalTimes,applyVerifiedRoute} from './dynamic-courses.js';
@@ -190,7 +191,7 @@ function openDialog(d){if(state.drivingPreview){toast('정차 화면에서 설�
 function showSettings(page='trip'){setSettingsTab(page);openDialog($('#settingsDialog'))}
 function setSettingsTab(page){state.settingsTab=page;$$('[data-setting-tab]').forEach(b=>{const on=b.dataset.settingTab===page;b.classList.toggle('selected',on);b.setAttribute('aria-selected',on);b.tabIndex=on?0:-1});['trip','vehicle','weather'].forEach(key=>$('#settings'+key[0].toUpperCase()+key.slice(1)).hidden=page!==key);$('.settings-content').scrollTop=0}
 function syncSteppers(){$$('[data-step]').forEach(b=>{const [id,amount]=b.dataset.step.split(':'),input=$('#'+id);const v=+input.value;b.disabled=+amount<0?v<=+input.min:v>=+input.max})}
-function renderDetail(id){const r=recommendations.find(x=>x.id===id)||effectiveRoutes().find(x=>x.id===id);if(!r)return;detailId=id;const min=courseMinutes(r),ep=evPlan(r);const departure=departureTimestamp($('#departure').value),arrivals=arrivalTimes(r,departure);const stops=r.spots.map((s,i)=>{const time=Number.isFinite(arrivals[i])?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(arrivals[i])):'재계산 후 안내';return `<li><small>${time} · ${i===0?'출발':i===r.spots.length-1?(r.route?.points.at(-1)?.type==='RETURN'?'복귀':'도착'):'경유 '+i}</small><b>${safeText(s[0])}</b><p>${safeText(s[1])}</p></li>`}).join('');
+function renderDetail(id){const r=recommendations.find(x=>x.id===id)||effectiveRoutes().find(x=>x.id===id);if(!r)return;detailId=id;const min=courseMinutes(r),ep=evPlan(r);const departure=departureTimestamp($('#departure').value),arrivals=arrivalTimes(r,departure);const stops=r.spots.map((s,i)=>{const time=Number.isFinite(arrivals[i])?new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(arrivals[i])):'재계산 후 안내';const kind=r.route?.points[i]?.type,label=({ORIGIN:'출발',RETURN:'복귀',DESTINATION:'최종 목적지'})[kind]||'경유 '+i;return `<li><small>${time} · ${label}</small><b>${safeText(s[0])}</b><p>${safeText(s[1])}</p></li>`}).join('');
 $('#detailContent').innerHTML=`<header class="detail-top"><div><p class="overline">${safeText(r.area)} · COURSE DETAIL</p><h2>${safeText(r.name)}</h2><p>${r.tags.join(' · ')}</p></div><button class="dialog-close" data-close-detail aria-label="코스 상세 닫기">${icon('close')}</button></header><div class="detail-scroll"><div><div class="detail-metrics"><div><span>코스 예상</span><strong>${timeText(min)}</strong></div><div><span>도로 거리</span><strong>약 ${r.km}km · ${r.route?.status==='ROAD_ROUTED'?'도로 경로':'추정'}</strong></div></div><h3 class="detail-section-title">이 길을 고른 이유</h3><ul class="detail-reasons">${(r.apiReasons||reasons(r)).slice(0,4).map(t=>`<li>${safeText(t)}</li>`).join('')}</ul>${state.vehicle==='ev'?`<div class="ev-box"><strong>${icon('bolt')}${evText(ep)}</strong>${ep.source} · 배터리 ${ep.battery}% · 예상 잔여 ${Number.isFinite(ep.remaining)?Math.round(ep.remaining):'미제공'}km · 예비 ${$('#reserve').value}%<br>충전소 정보는 별도 확인이 필요합니다. 실제 호환성·운영 상태와 충전 시간은 미확인입니다.<br><button class="button-secondary" data-mock-chargers="${r.id}">모의 충전소 확인</button><p id="mockChargingResult"></p></div>`:''}</div><div><h3 class="detail-section-title" style="margin-top:0">이렇게 다녀와요</h3><ol class="timeline">${stops}</ol><p class="detail-notice">${r.route?.status==='ROAD_ROUTED'?'실제 도로 연결을 확인했어요. 현재 통행·주차와 소요 시간은 달라질 수 있어요.':'거리·시간은 추정이에요. 선택한 코스의 도로 확인이 필요해요.'}<br>${r.route?.status==='ROAD_ROUTED'?'전체 경로는 도로 제공자의 거리와 예상 시간입니다. 차량 통행 가능 여부와 도착 시간은 바뀔 수 있습니다.':'실제 도로 연결은 아직 확인 전입니다.'} 3D는 주요 경유지 주변의 지형입니다. 전체 경유지 보기에서 방문 순서를 확인하세요.</p></div>${connectionSection(r,state.integration,!!window.FlowadNative?.postMessage,state.teslaConnected)}</div><footer class="detail-footer"><button class="detail-save ${saved.has(id)?'saved':''}" data-save="${id}" aria-pressed="${saved.has(id)}">${icon('bookmark')}${saved.has(id)?'저장됨':'저장하기'}</button><button class="button-secondary" data-drive-detail="${id}">주행 화면 미리보기${icon('arrow')}</button></footer>`;
 }
 function showDetail(id){selectRoute(id);renderDetail(id);openDialog($('#detailDialog'))}
@@ -203,7 +204,7 @@ $('#moodChips').addEventListener('click',e=>{const b=e.target.closest('[data-moo
 $$('[data-vehicle]').forEach(b=>b.addEventListener('click',()=>{state.vehicle=b.dataset.vehicle;$$('[data-vehicle]').forEach(x=>{x.classList.toggle('selected',x===b);x.setAttribute('aria-pressed',x===b)});$('#batteryOption').hidden=state.vehicle!=='ev';updateResults()}));
 $$('[data-weather]').forEach(b=>b.addEventListener('click',()=>{state.weather=b.dataset.weather;updateWeather()}));$$('[data-step]').forEach(b=>b.addEventListener('click',()=>{const [id,amount]=b.dataset.step.split(':'),input=$('#'+id);input.value=Math.min(+input.max,Math.max(+input.min,+input.value+(+amount)));if(id==='battery'){teslaBatteryReading=null;$('#batteryValue').textContent=input.value+'%';updateResults()}else{state[id==='temperature'?'temp':'wind']=+input.value;updateWeather()}}));
 ['duration','walking','range','reserve'].forEach(id=>$('#'+id).addEventListener('change',()=>{if(id==='range')teslaBatteryReading=null;updateResults()}));$('#departure').addEventListener('change',()=>{if(state.weatherSource==='live')applyOriginWeather();paintWeather();updateResults()});
-$('#detailDialog').addEventListener('click',async e=>{const close=e.target.closest('[data-close-detail]'),save=e.target.closest('[data-save]'),drive=e.target.closest('[data-drive-detail]');const native=e.target.closest('[data-native-route]');if(native && state.integration==='pleos' && window.FlowadNative?.postMessage){const r=recommendations.find(r=>r.id===native.dataset.nativeRoute);if(r?.navigationTicket){if(navigationBusy){toast('도로 정보를 확인하고 있어요. 잠시만 기다려 주세요.');return;}navigationBusy=true;native.disabled=true;try{const verified=await verifyRoad(r,$('#roadVerificationResult'));if(verified){window.FlowadNative.postMessage(JSON.stringify({ticket:verified.navigationTicket}));toast('검증된 경유지와 순서를 차량에 전달했어요.')}}catch{}finally{native.disabled=false;navigationBusy=false}}else toast('코스를 다시 추천받아 주세요.')}if(e.target.closest('[data-mock-chargers]')){showMockChargers(e.target.closest('[data-mock-chargers]').dataset.mockChargers)}if(close)$('#detailDialog').close();if(save)saveRoute(save.dataset.save);if(drive){selectRoute(drive.dataset.driveDetail);$('#detailDialog').close();setDrivingPreview(true)}});
+$('#detailDialog').addEventListener('click',async e=>{const close=e.target.closest('[data-close-detail]'),save=e.target.closest('[data-save]'),drive=e.target.closest('[data-drive-detail]');const native=e.target.closest('[data-native-route]');if(native && state.integration==='pleos' && window.FlowadNative?.postMessage){const r=recommendations.find(r=>r.id===native.dataset.nativeRoute);if(r?.navigationTicket){if(navigationBusy){toast('도로 정보를 확인하고 있어요. 잠시만 기다려 주세요.');return;}navigationBusy=true;native.disabled=true;try{const verified=await verifyRoad(r,$('#roadVerificationResult'));if(verified){window.FlowadNative.postMessage(JSON.stringify({ticket:verified.navigationTicket}));toast('차량 앱에 코스 확인을 요청했어요. 차량 화면에서 결과를 확인해 주세요.')}}catch{}finally{native.disabled=false;navigationBusy=false}}else toast('코스를 다시 추천받아 주세요.')}if(e.target.closest('[data-mock-chargers]')){showMockChargers(e.target.closest('[data-mock-chargers]').dataset.mockChargers)}if(close)$('#detailDialog').close();if(save)saveRoute(save.dataset.save);if(drive){selectRoute(drive.dataset.driveDetail);$('#detailDialog').close();setDrivingPreview(true)}});
 $('#aboutBtn').addEventListener('click',()=>openDialog($('#aboutDialog')));$$('[data-close]').forEach(b=>b.addEventListener('click',()=>$('#'+b.dataset.close).close()));$$('dialog').forEach(d=>{d.addEventListener('close',()=>{document.body.classList.remove('modal-open');if(d.id==='detailDialog')detailId=null});d.addEventListener('click',e=>{if(e.target===d){const b=d.getBoundingClientRect();if(e.clientX<b.left||e.clientX>b.right||e.clientY<b.top||e.clientY>b.bottom)d.close()}})});
 $('#tourBtn').addEventListener('click',()=>{if(sceneAPI)sceneAPI.toggleTour();else toast('3D 화면을 준비하고 있어요.')});$('#resetView').addEventListener('click',()=>sceneAPI?.reset());$('#driveModeBtn').addEventListener('click',()=>setDrivingPreview(!state.drivingPreview));$('#returnParked').addEventListener('click',()=>setDrivingPreview(false));
 const tick=()=>{$('#clockTime').textContent=new Intl.DateTimeFormat('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date())};tick();setInterval(tick,15000);
@@ -637,7 +638,7 @@ $('#detailDialog').addEventListener('change',e=>{if(!e.target.matches('[data-det
 $('#detailDialog').addEventListener('click',async e=>{
  if(e.target.closest('[data-open-vehicle]')){showSettings('vehicle');return;}
  const button=e.target.closest('[data-copy-stops]');if(!button)return;const r=recommendations.find(r=>r.id===button.dataset.copyStops);if(!r)return;
- try{await navigator.clipboard.writeText((r.waypoints??[]).map((p,i)=>(i+1)+'. '+p.name).join('\n'));toast('경유지 이름을 복사했어요. 차량 내비에서 순서대로 검색해 주세요.');}catch{toast('복사하지 못했어요. 경유지 이름을 직접 확인해 주세요.');}
+ try{await navigator.clipboard.writeText((r.route?.points??[]).map((p,i)=>(i+1)+'. '+(({ORIGIN:'출발',DESTINATION:'최종 목적지',RETURN:'복귀'})[p.type]||'경유')+' · '+p.name).join('\n'));toast('전체 방문 순서를 복사했어요. 차량 내비에서 순서대로 검색해 주세요.');}catch{toast('복사하지 못했어요. 경유지 이름을 직접 확인해 주세요.');}
 });
 paintIntegration();
 
@@ -653,20 +654,39 @@ async function showMockChargers(id){const r=recommendations.find(x=>x.id===id), 
 function navigationConditions(){return {vehicleType:state.vehicle,batteryPercent:state.vehicle==='ev'?+$('#battery').value:null,estimatedRangeKm:state.vehicle==='ev'?+$('#range').value:null,walking:$('#walking').checked,availableMinutes:+$('#duration').value};}
 function verifiedRoadHtml(result,r){const line=actualRoadPoints({route:result.route}).length>1;const battery={NOT_APPLICABLE:'일반 차량',INSUFFICIENT_INPUT:'배터리 입력 부족',ESTIMATED_SUFFICIENT:'입력값 기준 주행 가능 범위',CHARGING_MAY_BE_NEEDED:'충전이 필요할 수 있음'}[result.batteryStatus]||'별도 확인 필요';return '<p>실제 도로 연결을 확인했어요. '+(line?'제공된 도로선을 표시할 수 있어요.':'도로선 자료는 없어 경유지와 방문 순서로 보여드려요.')+'</p><p>'+result.route.distanceKm+'km · '+timeText(Math.ceil(result.route.totalSeconds/60))+'</p><p>'+battery+(result.withinAvailableMinutes===false?' · 설정한 시간을 초과해요.':'')+' · 현재 통행과 주차는 별도 확인해 주세요.</p>';}
 async function verifyRoad(r,output){
- const origin=state.location,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
+ const origin=state.location,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),125000);
  if(output)output.textContent='선택한 코스의 실제 도로 연결을 확인하고 있어요…';
  try{
   if(!origin||origin.kind==='demo'||state.locating)throw Error('REAL_ORIGIN_REQUIRED');
+  if(Date.now()<roadRetryAt)throw Error('ROAD_PROVIDER_RATE_LIMIT');
+  await waitForRoadService({signal:controller.signal,onWaiting:()=>{if(output)output.textContent='도로 서버를 준비하고 있어요. 절전 복귀에는 약 1분이 걸릴 수 있어요…';}});
+  if(origin!==state.location||recommendations.find(x=>x.id===r.id)!==r)return null;
   const response=await fetch('./api/navigation/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ticket:r.navigationTicket,...navigationConditions()}),signal:controller.signal,cache:'no-store'}),data=await response.json();
-  if(!response.ok||data.roadVerified!==true)throw Error(data.error||'ROAD_VERIFICATION_REQUIRED');
+  if(!response.ok||data.roadVerified!==true){const error=Error(data.error||'ROAD_VERIFICATION_REQUIRED');error.waypointOrders=data.waypointOrders;error.retryAfterSeconds=Number(response.headers.get('Retry-After'))||0;throw error;}
   if(origin!==state.location||recommendations.find(x=>x.id===r.id)!==r)return null;
   if(output)output.innerHTML=verifiedRoadHtml(data,r);
   Object.assign(r,applyVerifiedRoute(r,data));render();syncSelection();
+  if(detailId===r.id&&$('#detailDialog').open){
+   const metrics=$$('#detailContent .detail-metrics strong');
+   if(metrics[0])metrics[0].textContent=timeText(courseMinutes(r));
+   if(metrics[1])metrics[1].textContent=r.km+'km · 도로 경로';
+   const arrivals=arrivalTimes(r,departureTimestamp($('#departure').value));
+   $$('#detailContent .timeline small').forEach((node,i)=>{const type=r.route.points[i]?.type,label=({ORIGIN:'출발',RETURN:'복귀',DESTINATION:'최종 목적지'})[type]||'경유 '+i;node.textContent=new Intl.DateTimeFormat('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(arrivals[i]))+' · '+label;});
+   const notice=$('#detailContent .detail-notice');if(notice)notice.textContent='실제 도로 연결을 확인했어요. 현재 통행·명소 진입·주차와 소요 시간은 달라질 수 있어요. 3D는 주요 경유지 주변의 지형입니다. 전체 경유지 보기에서 방문 순서를 확인하세요.';
+  }
   return data;
- }catch(e){if(output)output.innerHTML=`<p>도로 검증 불가 · ${safeText(navigationErrors[e.message]||'도로 서버가 기동 중이거나 응답하지 않습니다.')} 기본 추천은 유지되며 차량 전송은 허용되지 않습니다.</p><button class="button-secondary" data-road-verify="${safeText(r.id)}">도로 확인 다시 시도</button>`;throw e;}finally{clearTimeout(timer)}
+ }catch(e){
+  if(e.retryAfterSeconds)roadRetryAt=Date.now()+Math.min(300,e.retryAfterSeconds)*1000;
+  const renew=['INVALID_TICKET','TICKET_EXPIRED'].includes(e.message);
+  if(renew)r.navigationTicket=null;
+  const names=(e.waypointOrders??[]).map(i=>r.route?.points?.[i]?.name).filter(Boolean);
+  if(output)output.innerHTML=`<p>도로 검증 불가 · ${safeText(navigationErrors[e.message]||'도로 서버가 기동 중이거나 응답하지 않습니다.')} ${names.length?'확인이 필요한 지점: '+names.map(safeText).join(', '):''} 차량 전송은 허용되지 않습니다.</p>`+(renew?'<button class="button-secondary" data-renew-navigation>코스 다시 추천받기</button>':`<button class="button-secondary" data-road-verify="${safeText(r.id)}">도로 확인 다시 시도</button>`);
+  throw e;
+ }finally{clearTimeout(timer)}
 }
+$('#detailDialog').addEventListener('click',e=>{if(e.target.closest('[data-renew-navigation]')&&!navigationBusy){$('#detailDialog').close();updateResults();}});
 $('#detailDialog').addEventListener('click',async e=>{const button=e.target.closest('[data-road-verify]');if(!button||navigationBusy)return;const r=recommendations.find(x=>x.id===button.dataset.roadVerify);if(!r?.navigationTicket){toast('코스를 다시 추천받아 주세요.');return;}navigationBusy=true;button.disabled=true;try{await verifyRoad(r,$('#roadVerificationResult'));}catch{}finally{button.disabled=false;navigationBusy=false}});
-let navigationPlan=null, navigationOrigin=null, navigationBusy=false;
+let navigationPlan=null, navigationOrigin=null, navigationBusy=false, roadRetryAt=0;
 const navigationErrors={
  REAL_ORIGIN_REQUIRED:'현재 위치를 확인하거나 출발 지역을 직접 선택하세요.',
  COMMAND_PERMISSION_REQUIRED:'설정 → 차량에서 내비 전송 권한을 선택해 다시 로그인하세요.',
@@ -676,7 +696,15 @@ const navigationErrors={
  NO_VEHICLE_SELECTED:'Tesla 연결 후 차량 선택이 필요합니다. 설정 → 차량에서 차량을 선택하세요.',
  ROAD_ROUTE_REQUIRED:'실제 도로 경로를 확인해야 합니다.',
  ROAD_VERIFICATION_REQUIRED:'도로 검증 완료 전에는 차량으로 보낼 수 없습니다. 다시 도로를 확인하세요.',
- INVALID_TICKET:'추천 티켓이 만료됐습니다. 코스를 다시 추천받아 주세요.',
+ INVALID_TICKET:'추천 정보를 확인할 수 없어요. 코스를 다시 추천받아 주세요.',
+ TICKET_EXPIRED:'추천의 유효 시간이 지났어요. 새 코스를 추천받은 뒤 확인해 주세요.',
+ INVALID_REQUEST:'설정값을 확인하고 코스를 다시 추천받아 주세요.',
+ ROAD_PROVIDER_WARMING:'도로 서버 준비가 아직 끝나지 않았어요. 잠시 후 직접 다시 확인해 주세요.',
+ ROAD_PROVIDER_TIMEOUT:'도로 응답이 늦어요. 서버 준비 또는 혼잡 상태일 수 있으니 잠시 후 직접 다시 확인해 주세요.',
+ ROAD_VERIFICATION_BUSY:'도로 확인 요청이 많아요. 잠시 후 직접 다시 시도해 주세요.',
+ ROAD_PROVIDER_RATE_LIMIT:'도로 서버의 요청 한도에 도달했어요. 잠시 후 직접 다시 확인해 주세요.',
+ ROAD_PROVIDER_CHALLENGE:'도로 서버의 연결 확인이 필요해요. 잠시 후 직접 다시 시도해 주세요.',
+ PROVIDER_PERMISSION_DENIED:'도로 서버에 연결할 수 없어요. 다른 코스를 탐색하거나 잠시 후 다시 확인해 주세요.',
  INVALID_CSRF:'Tesla 연결 전이거나 세션이 만료됐습니다. 설정 → 차량에서 로그인 상태를 확인하세요.',
  PROVIDER_UNAVAILABLE:'도로 서버가 기동 중이거나 응답하지 않습니다. 잠시 후 직접 다시 시도해 주세요.',
  RATE_LIMIT:'도로 제공자의 요청 제한 상태입니다. 잠시 후 직접 다시 확인해 주세요.',
@@ -717,6 +745,10 @@ $('#detailDialog').addEventListener('click',async e=>{
    output.textContent='출발 위치와 경유지의 도로 경로를 확인하고 있습니다…';
    const selectedCourse=recommendations.find(r=>r.id===preview.dataset.teslaPreview);
    if(!selectedCourse?.navigationTicket)throw Error('INVALID_TICKET');
+   if(Date.now()<roadRetryAt)throw Error('ROAD_PROVIDER_RATE_LIMIT');
+   const verified=await verifyRoad(selectedCourse,output);
+   if(!verified)return;
+   if(origin!==state.location||recommendations.find(r=>r.id===selectedCourse.id)!==selectedCourse)return;
    const plan=await teslaPost('navigation/preview',{ticket:selectedCourse.navigationTicket,...navigationConditions()});
    if(plan.requiresVehicleCheck){renderTeslaCommand(output,plan);return}
    if(origin!==state.location||recommendations.find(r=>r.id===selectedCourse.id)!==selectedCourse)return;
@@ -742,8 +774,9 @@ $('#detailDialog').addEventListener('click',async e=>{
    renderTeslaCommand(output,result);
   }
  }catch(error){
+  if(error.retryAfterSeconds)roadRetryAt=Date.now()+Math.min(300,error.retryAfterSeconds)*1000;
   output.textContent=navigationErrors[error.message]||'요청을 완료하지 못했습니다. 전송을 시도했다면 차량 화면을 먼저 확인하세요.';
-  if(preview){navigationPlan=null;navigationOrigin=null;const retry=document.createElement('button');retry.className='button-secondary';retry.dataset.teslaPreview=preview.dataset.teslaPreview;retry.textContent='연결·차량 선택 확인 후 도로 검증 다시 시도';output.append(document.createElement('br'),retry);}
+  if(preview){navigationPlan=null;navigationOrigin=null;const retry=document.createElement('button');retry.className='button-secondary';if(['INVALID_TICKET','TICKET_EXPIRED'].includes(error.message)){const course=recommendations.find(r=>r.id===preview.dataset.teslaPreview);if(course)course.navigationTicket=null;retry.dataset.renewNavigation='';retry.textContent='코스 다시 추천받기';}else{retry.dataset.teslaPreview=preview.dataset.teslaPreview;retry.textContent='연결·차량 선택 확인 후 도로 검증 다시 시도';}output.append(document.createElement('br'),retry);}
  }finally{
   navigationBusy=false;
   button.disabled=false;

@@ -10,6 +10,10 @@ class RecommendationVerifierTest {
         val route = RecommendationVerifier.parseResolved(response)
         assertEquals(listOf("ORIGIN", "SCENIC_WAYPOINT", "RETURN"), route.points.map { it.type })
     }
+    @Test fun acceptsDynamicIdsAndOneWayDestinations() {
+        val route = RecommendationVerifier.parseResolved(response.replace("\"test\"", "\"dyn-Ab_Cd-123\"").replace("\"RETURN\"", "\"DESTINATION\""))
+        assertEquals("DESTINATION", route.points.last().type)
+    }
     @Test fun rejectsUnknownCourseAndInvalidCoordinates() {
         assertThrows(Exception::class.java) { RecommendationVerifier.parseResolved(response.replace("test", "bad/id")) }
         assertThrows(Exception::class.java) { RecommendationVerifier.parseResolved(response.replace("37.1", "137.1")) }

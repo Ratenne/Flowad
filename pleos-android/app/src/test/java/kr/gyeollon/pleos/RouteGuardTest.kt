@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RouteGuardTest {
+    @org.junit.Test fun preservesOneWayAndRoundTripDestinationOrder() {
+        val origin = RoutePoint(0, "ORIGIN", "출발", 35.18, 129.07)
+        val scenic = RoutePoint(1, "SCENIC_WAYPOINT", "해안", 35.2, 129.2)
+        val destination = RoutePoint(2, "DESTINATION", "도착", 35.3, 129.25)
+        val back = RoutePoint(3, "RETURN", "복귀", 35.18, 129.07)
+        for (points in listOf(listOf(origin, scenic, destination), listOf(origin, scenic, destination, back))) {
+            val segments = RouteGuard.prepare(RecommendedRoute(points, "ROAD_ROUTED"))
+            assertEquals(points.drop(1), segments.flatMap { it.waypoints + it.destination })
+        }
+        assertThrows(IllegalArgumentException::class.java) { RouteGuard.prepare(RecommendedRoute(listOf(origin, scenic, destination), "ESTIMATED_NOT_ROAD_ROUTED")) }
+    }
     private fun point(order: Int, type: String) = RoutePoint(order, type, "지점$order", 37.0 + order / 10000.0, 127.0)
     private fun route(waypoints: Int): RecommendedRoute = RecommendedRoute(
         listOf(point(0, "ORIGIN")) + (1..waypoints).map { point(it, "SCENIC_WAYPOINT") } + point(waypoints + 1, "RETURN"), "ROAD_ROUTED")

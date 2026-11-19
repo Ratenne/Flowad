@@ -21,15 +21,27 @@ export async function road(points: Point[], env: Env, includeGeometry=env.FREE_P
 async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords=points.map(p=>`${p.longitude},${p.latitude}`).join(';'),signal?:AbortSignal){
   if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   let response;
-  try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000); }
-  catch { throw new Failure('PROVIDER_UNAVAILABLE',503); }
+  const started=performance.now();
+  try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},25000); }
+  catch(e) {
+    const timeout=e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT';
+    console.warn(JSON.stringify({event:'osrm_route_failure',reason:timeout?'timeout':'connection_failure',elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
+    throw new Failure(timeout?'ROAD_PROVIDER_TIMEOUT':'PROVIDER_UNAVAILABLE',503,20);
+  }
+  if(response.status!==200)console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
   return response;
 }
 export function roadResponse(points:Point[],response:{status:number;data:unknown;challenged?:boolean;retryAfterSeconds?:number},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {
   if(response.challenged)throw new Failure('ROAD_PROVIDER_CHALLENGE',503);
   if(response.status===429)throw new Failure('ROAD_PROVIDER_RATE_LIMIT',503,response.retryAfterSeconds??30);
   if(response.status===403)throw new Failure('PROVIDER_PERMISSION_DENIED',503);
-  if(response.status===400){const code=object(response.data).code;throw new Failure(code==='NoSegment'?'WAYPOINT_TOO_FAR_FROM_ROAD':code==='NoRoute'?'NO_ROAD_ROUTE':'INVALID_PROVIDER_RESPONSE');}
+  if(response.status===400){
+    const data=object(response.data),code=data.code;
+    const error=new Failure(code==='NoSegment'?'WAYPOINT_TOO_FAR_FROM_ROAD':code==='NoRoute'?'NO_ROAD_ROUTE':'INVALID_PROVIDER_RESPONSE');
+    const match=typeof data.message==='string'?data.message.match(/coordinate (\d+)\b/):null;
+    if(code==='NoSegment'&&match&&Number(match[1])<points.length)error.context={waypointOrders:[Number(match[1])]};
+    throw error;
+  }
   if(response.status!==200)throw new Failure('PROVIDER_UNAVAILABLE',503);
   // Validate the provider stream's parsed objects in one pass. Avoid cloning every
   // tuple through nested schemas before constructing the public leg geometry.
@@ -37,7 +49,7 @@ export function roadResponse(points:Point[],response:{status:number;data:unknown
   if(!Array.isArray(root.routes)||!root.routes.length||!Array.isArray(root.waypoints))throw new Failure('INVALID_PROVIDER_RESPONSE');
   const raw=object(root.routes[0]).legs;
   if(!Array.isArray(raw)||root.waypoints.length!==points.length||raw.length!==points.length-1)throw new Failure('INCOMPLETE_ROUTE');
-  root.waypoints.forEach((value,i)=>{const w=object(value),location=xy(w.location),snap=number(w.distance);if(snap<0||snap>100||distance(location[1],location[0],points[i].latitude,points[i].longitude)>.101)throw new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');});
+  root.waypoints.forEach((value,i)=>{const w=object(value),location=xy(w.location),snap=number(w.distance);if(snap<0||snap>100||distance(location[1],location[0],points[i].latitude,points[i].longitude)>.101){const error=new Failure('WAYPOINT_TOO_FAR_FROM_ROAD');error.context={waypointOrders:[i]};throw error;}});
   const legs: Leg[]=raw.map((value,i)=>{
     const l=object(value),meters=number(l.distance),seconds=number(l.duration);
     if(meters<=0||seconds<=0||seconds>2147483647)throw new Failure('INVALID_PROVIDER_RESPONSE');

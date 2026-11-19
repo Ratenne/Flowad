@@ -1,9 +1,52 @@
 import {recommendWithRouting,recommendation as parseRecommendation} from '../src/legacy-recommendations';
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import {call,base,config,external,json,authenticated} from './helpers';
 import {resolve} from '../src/tickets';
 import {Sessions} from '../src/repository';
 import {now} from '../src/utils';
+import {issue} from '../src/tickets';
+import {point,finish} from '../src/routing';
+it('preserves the full dynamic itinerary in Tesla preparation without any vehicle command',async()=>{
+ const e=config({ROAD_ROUTING_URL:'https://roads.test',TESLA_CLIENT_ID:'public',TESLA_CLIENT_SECRET:'public',TESLA_REDIRECT_URI:'https://flowad.test/api/tesla/callback'});
+ const points=[point(0,'ORIGIN','출발',35.1796,129.0756),point(1,'SCENIC_WAYPOINT','해안',35.2,129.2),point(2,'DESTINATION','목적지',35.3,129.25),point(3,'RETURN','복귀',35.1796,129.0756)];
+ const ticket=await issue('dyn-Ab_Cd',finish(points,{legs:[],status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'TEST',geometryStatus:'NOT_AVAILABLE'},0,'UNAVAILABLE',[]),e.NAVIGATION_TICKET_SECRET);
+ const provider=external(url=>{expect(new URL(url).hostname).toBe('roads.test');const coords=new URL(url).pathname.split('/').at(-1)!.split(';').map(v=>v.split(',').map(Number));return json({code:'Ok',waypoints:coords.map(location=>({location,distance:0})),routes:[{legs:coords.slice(1).map(()=>({distance:10000,duration:900}))}]});});
+ const a=await authenticated({},e),response=await a.post('navigation/preview',{ticket,vehicleType:'ice'});
+ expect(response.status).toBe(200);const plan=await response.json() as {stops:unknown[];navigationTicket:string};
+ expect(plan).toMatchObject({mode:'SINGLE_DESTINATION',multiStopStatus:'UNSUPPORTED',commandStatus:'COMMAND_NOT_SENT'});
+ expect(plan.stops).toMatchObject(points.slice(1).map(p=>({order:p.order,kind:p.type,name:p.name,latitude:p.latitude,longitude:p.longitude})));expect(provider).toHaveBeenCalledOnce();
+ const prepared=await a.post('navigation/preview',{ticket:plan.navigationTicket,vehicleType:'ice'});
+ expect(prepared.status).toBe(200);expect(provider).toHaveBeenCalledOnce();
+ expect((await prepared.json() as {stops:unknown[]}).stops).toEqual(plan.stops);
+ const proof=await resolve(plan.navigationTicket,e.NAVIGATION_TICKET_SECRET),session=await new Sessions(e).open(a.id);
+ expect(session.data.plan?.expires).toBeLessThanOrEqual(proof.expiresAt);
+});
+it('distinguishes a delayed provider from bad input and never retries Route automatically',async()=>{
+ const e=config({ROAD_ROUTING_URL:'https://roads.test'}),c=await recommendation(e);
+ vi.useFakeTimers();
+ try{
+  const provider=external((_url,init)=>new Promise((_resolve,reject)=>init?.signal?.addEventListener('abort',()=>reject(Error('timeout')),{once:true})));
+  const pending=call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e});
+  while(!provider.mock.calls.length)await vi.advanceTimersByTimeAsync(1);
+  await vi.advanceTimersByTimeAsync(25001);
+  const response=await pending;expect(response.status).toBe(503);expect(await response.json()).toMatchObject({error:'ROAD_PROVIDER_TIMEOUT',roadVerified:false});expect(provider).toHaveBeenCalledOnce();
+ }finally{vi.useRealTimers();}
+});
+it('coalesces concurrent verification, identifies an inaccessible point and allows manual retry',async()=>{
+ const e=config({ROAD_ROUTING_URL:'https://roads.test'}),points=[point(0,'ORIGIN','공개 테스트 출발',35.1796,129.0756),point(1,'SCENIC_WAYPOINT','공개 테스트 해안',35.2,129.2),point(2,'DESTINATION','공개 테스트 도착',35.3,129.25),point(3,'RETURN','공개 테스트 복귀',35.1796,129.0756)];
+ const route=finish(points,{legs:[],status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'TEST_ONLY',geometryStatus:'NOT_AVAILABLE'},0,'UNAVAILABLE',[]);
+ const ticket=await issue('dyn-test',route,e.NAVIGATION_TICKET_SECRET);
+ let release!:(r:Response)=>void;
+ const provider=external(()=>new Promise<Response>(resolve=>{release=resolve;}));
+ const a=call('/api/navigation/verify',{ticket},{env:e}),b=call('/api/navigation/verify',{ticket},{env:e});
+ while(!release)await new Promise(resolve=>setTimeout(resolve,1));
+ await new Promise(resolve=>setTimeout(resolve,10));
+ release(json({code:'NoSegment',message:'Could not find a matching segment for coordinate 1'},400));
+ const results=await Promise.all([a,b]);expect(provider).toHaveBeenCalledOnce();
+ for(const r of results){expect(r.status).toBe(400);expect(await r.json()).toMatchObject({error:'WAYPOINT_TOO_FAR_FROM_ROAD',courseId:'dyn-test',waypointOrders:[1]});}
+ external(url=>{const coords=new URL(url).pathname.split('/').at(-1)!.split(';').map(v=>v.split(',').map(Number));return json({code:'Ok',waypoints:coords.map(location=>({location,distance:0})),routes:[{legs:coords.slice(1).map(()=>({distance:10000,duration:900}))}]});});
+ expect((await call('/api/navigation/verify',{ticket},{env:e})).status).toBe(200);
+});
 async function recommendation(e=config(),extra={}){return (await recommendWithRouting(parseRecommendation.parse({...base,availableMinutes:1440,...extra}),{...e,ROAD_ROUTING_URL:undefined,OSRM_BATCH_URL:undefined})).courses[0];}
 function roads(url:string){const u=new URL(url);expect(u.searchParams.get('steps')).toBe('false');expect(u.searchParams.get('overview')).toBe('false');expect(u.searchParams.get('radiuses')).toBe('100;100;100;100;100');const coords=u.pathname.split('/').at(-1)!.split(';').map(v=>v.split(',').map(Number));return json({code:'Ok',waypoints:coords.map(c=>({distance:6,location:[c[0],c[1]+.00005]})),routes:[{legs:coords.slice(1).map(()=>({distance:30000,duration:1800}))}]});}
 it('distinguishes an anonymous session from a connected account with no selected vehicle',async()=>{

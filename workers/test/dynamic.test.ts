@@ -3,7 +3,33 @@ import {call,base,config,external,json} from './helpers';
 import {distance} from '../src/utils';
 import {resolve} from '../src/tickets';
 import {nearby} from '../src/poi';
+import type {Route} from '../src/types';
 const cities=[['서울',37.5665,126.978],['부산',35.1796,129.0756],['대구',35.8714,128.6014],['제주',33.4996,126.5312],['강원',37.74,128.75],['저밀도',34.9,126.4]] as const;
+it('recalculates saved public stops in their original visit order',async()=>{
+ await seed();const poiIds=['fixture:부산:1','fixture:부산:0','fixture:부산:2'];
+ const response=await call('/api/recommendations',{...base,latitude:35.1796,longitude:129.0756,poiIds});
+ const data=await response.json() as {courses:Array<{waypoints:Array<{id:string}>}>};
+ expect(data.courses).toHaveLength(1);expect(data.courses[0].waypoints.map(p=>p.id)).toEqual(poiIds);
+});
+it.each([true,false])('preserves scenic stops, destination and optional return through verification (%s)',async roundTrip=>{
+ await seed();const e=config({ROAD_ROUTING_URL:'https://roads.test'}),roads=mockRoads();
+ const response=await call('/api/recommendations',{...base,latitude:35.1796,longitude:129.0756,roundTrip,vehicleType:'ice',walking:false},{env:e});
+ const data=await response.json() as {courses:Array<{id:string;navigationTicket:string;route:Route}>};
+ expect(roads).not.toHaveBeenCalled();expect(data.courses.length).toBeGreaterThan(0);
+ for(const c of data.courses){
+  expect(c.route.points.filter(p=>p.type==='SCENIC_WAYPOINT').length).toBeGreaterThan(0);
+  expect(c.route.points.filter(p=>p.type==='DESTINATION')).toHaveLength(1);
+  expect(c.route.points.at(-1)?.type).toBe(roundTrip?'RETURN':'DESTINATION');
+  expect(c.route.legs.every(l=>l.geometry===null)).toBe(true);
+ }
+ const c=data.courses[0];
+ const verified=await call('/api/navigation/verify',{ticket:c.navigationTicket,vehicleType:'ice',walking:false},{env:e});
+ const result=await verified.json() as {navigationTicket:string;route:Route};
+ expect(verified.status).toBe(200);expect(result.route.points).toEqual(c.route.points);
+ expect((await resolve(result.navigationTicket,e.NAVIGATION_TICKET_SECRET)).route.points).toEqual(c.route.points);
+ expect(roads).toHaveBeenCalledOnce();
+ const url=new URL(String(roads.mock.calls[0][0]));expect(url.pathname.split('/').at(-1)?.split(';')).toHaveLength(c.route.points.length);
+});
 async function seed(){
  const db=config().DB,at='2026-11-01T00:00:00Z';
  await db.prepare('INSERT INTO poi_datasets VALUES(?,?,?,?,?,?)').bind('fixture','FIXTURE',at,at,'SYNTHETIC TEST ONLY','COMPLETE').run();

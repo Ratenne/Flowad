@@ -2,6 +2,7 @@ import { z } from 'zod';
 // Avoid per-schema dynamic validator compilation on a cold edge isolate.
 z.config({jitless:true});
 export class Failure extends Error {
+  context?:{courseId?:string;waypointOrders?:number[]};
   constructor(public code: string, public status: 400 | 403 | 409 | 413 | 429 | 503 = 400, public retryAfterSeconds?:number) { super(code); }
 }
 export const coordinate = z.object({ latitude: z.number().min(-90).max(90), longitude: z.number().min(-180).max(180) });

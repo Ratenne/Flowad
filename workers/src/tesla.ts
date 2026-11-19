@@ -6,7 +6,7 @@ import { Sessions, type Lease, quota } from './repository';
 import { AUDIENCE, acceptTokens, configured, hasScope, TeslaClient } from './tesla-client';
 import { coordinate, Failure, hash, nonce, now, round } from './utils';
 import { destination } from './routing';
-import {selectedRequest,vehicleConditions,verifySelected,verifySelection} from './selected-route';
+import {selectedRequest,vehicleConditions,prepareSelected,verifySelection} from './selected-route';
 
 const response=z.object({response:z.unknown()});
 function payload(raw:unknown){const parsed=response.safeParse(raw);if(!parsed.success)throw new Failure('INVALID_RESPONSE');return parsed.data.response;}
@@ -131,20 +131,20 @@ tesla.post('/location',async c=>{
   if(!d.success)throw new Failure('LOCATION_UNAVAILABLE');const p=d.data.drive_state,at=p.timestamp??null;
   return c.json({status:'LIVE',batteryPercent:null,estimatedRangeKm:null,observedAt:at,stale:at==null||Date.now()-at>900000,latitude:p.latitude,longitude:p.longitude,locationStatus:'AVAILABLE'});
 });
-function preview(c: Context,r:Route,text?:string){
-  const s=lease(c).data,v=selected(s),seen=new Set<string>(),last=r.points.at(-1)!;seen.add(`${last.latitude},${last.longitude}`);
-  const stops=r.points.slice(1).filter((p,i,a)=>{const key=`${p.latitude},${p.longitude}`;if(i===a.length-1)return true;if(seen.has(key))return false;seen.add(key);return true;}).map((p,i)=>({order:i+1,kind:p.type,name:p.name,latitude:p.latitude,longitude:p.longitude,navigationText:text??`${p.latitude},${p.longitude}`}));
+function preview(c: Context,r:Route,text?:string,proofExpiresAt?:number){
+  const s=lease(c).data,v=selected(s);
+  const stops=r.points.slice(1).map((p,i)=>({order:i+1,kind:p.type,name:p.name,latitude:p.latitude,longitude:p.longitude,navigationText:text??`${p.latitude},${p.longitude}`}));
   if(r.status!=='ROAD_ROUTED')throw new Failure('ROAD_ROUTE_REQUIRED');
-  s.plan={id:crypto.randomUUID(),vehicle:v,expires:now()+300,stops,attempted:0,status:'NOT_SENT',vehicleStatus:'VEHICLE_NOT_CONFIRMED',pending:false,roadVerified:true};
-  return {planId:s.plan.id,route:r,stops,mode:'SINGLE_DESTINATION',multiStopStatus:'UNSUPPORTED',status:'NOT_SENT',commandStatus:'COMMAND_NOT_SENT',expiresInSeconds:300,roadVerified:true,verificationStatus:'ROAD_ROUTE_VERIFIED'};
+  s.plan={id:crypto.randomUUID(),vehicle:v,expires:Math.min(now()+300,proofExpiresAt??now()+300),stops,attempted:0,status:'NOT_SENT',vehicleStatus:'VEHICLE_NOT_CONFIRMED',pending:false,roadVerified:true};
+  return {planId:s.plan.id,route:r,stops,mode:'SINGLE_DESTINATION',multiStopStatus:'UNSUPPORTED',status:'NOT_SENT',commandStatus:'COMMAND_NOT_SENT',expiresInSeconds:s.plan.expires-now(),roadVerified:true,verificationStatus:'ROAD_ROUTE_VERIFIED'};
 }
 tesla.post('/navigation/preview',async c=>{
   const s=lease(c).data;if(!configured(c.env))throw new Failure('COMMAND_NOT_CONFIGURED');if(pending(s))return c.json(outcome(s.plan!));
   const input=await body(c,z.union([selectedRequest,vehicleConditions.extend({courseId:z.string(),latitude:z.number().min(-90).max(90),longitude:z.number().min(-180).max(180),returnLatitude:z.number().min(-90).max(90).optional(),returnLongitude:z.number().min(-180).max(180).optional()}).refine(v=>(v.returnLatitude===undefined)===(v.returnLongitude===undefined))]));selected(s);
   // A failed new verification invalidates a previously prepared, unsent plan.
   delete s.plan;
-  const verified='ticket'in input?await verifySelected(input,c.env):await verifySelection(input.courseId,input.latitude,input.longitude,input.returnLatitude??input.latitude,input.returnLongitude??input.longitude,input,c.env);
-  return c.json({...preview(c,verified.route),batteryStatus:verified.batteryStatus,withinAvailableMinutes:verified.withinAvailableMinutes,navigationTicket:verified.navigationTicket,note:verified.note});
+  const verified='ticket'in input?await prepareSelected(input,c.env):await verifySelection(input.courseId,input.latitude,input.longitude,input.returnLatitude??input.latitude,input.returnLongitude??input.longitude,input,c.env);
+  return c.json({...preview(c,verified.route,undefined,'expiresAt'in verified&&typeof verified.expiresAt==='number'?verified.expiresAt:undefined),batteryStatus:verified.batteryStatus,withinAvailableMinutes:verified.withinAvailableMinutes,navigationTicket:verified.navigationTicket,note:verified.note});
 });
 tesla.post('/navigation/destination/preview',async c=>{
   const s=lease(c).data;if(!configured(c.env))throw new Failure('COMMAND_NOT_CONFIGURED');if(pending(s))return c.json(outcome(s.plan!));

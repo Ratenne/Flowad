@@ -6,9 +6,15 @@ import {resolve} from './tickets';
 import {selectedRequest,verifySelected} from './selected-route';
 import {Failure,hash,nonce,now} from './utils';
 import {dynamicPolicy} from './dynamic-recommendations';
+import {navigationReadiness} from './navigation-readiness';
 const inFlight=new Map<string,Promise<unknown>>();
-export const recommendationMethods={'/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST'} as const;
+export const recommendationMethods={'/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST','/api/navigation/readiness':'POST'} as const;
 export function mountRecommendationApi(app:Hono<Bindings>){
+ app.post('/api/navigation/readiness',async c=>{
+  const result=await navigationReadiness(c.env);
+  if(result.retryAfterSeconds)c.header('Retry-After',String(result.retryAfterSeconds));
+  return c.json(result,result.ready?200:202);
+ });
  app.post('/api/recommendations',async c=>{
   const raw:unknown=await c.req.json().catch(()=>null),r=recommendation.safeParse(raw);
   if(!r.success)return c.json({error:'Invalid recommendation request'},400);
@@ -35,6 +41,6 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   const parsed=selectedRequest.safeParse(await c.req.json().catch(()=>null));
   if(!parsed.success)return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:'INVALID_REQUEST'},400);
   try{return c.json(await verifySelected(parsed.data,c.env));}
-  catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code},error.status);}
+  catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code,...error.context},error.status);}
  });
 }

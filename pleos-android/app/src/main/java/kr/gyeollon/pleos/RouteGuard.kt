@@ -11,12 +11,12 @@ object RouteGuard {
     const val MAX_ROUTE_POINTS = 1000
 
     fun prepare(route: RecommendedRoute): List<NavigationPlan> {
-        require(route.status == "ROAD_ROUTED" || route.status == "ESTIMATED_NOT_ROAD_ROUTED") { "지원하지 않는 경로 상태" }
+        require(route.status == "ROAD_ROUTED") { "실제 도로 확인이 필요합니다" }
         require(route.points.size in 2..MAX_ROUTE_POINTS) { "경로 지점 수가 올바르지 않습니다" }
         route.points.forEachIndexed { index, point ->
             require(point.order == index && point.name.isNotBlank() && point.name.length <= 200) { "잘못된 경로 순서 또는 이름" }
             require(point.latitude.isFinite() && point.latitude in -90.0..90.0 && point.longitude.isFinite() && point.longitude in -180.0..180.0) { "잘못된 좌표" }
-            val expected = when (index) { 0 -> setOf("ORIGIN"); route.points.lastIndex -> setOf("RETURN"); else -> setOf("SCENIC_WAYPOINT", "CHARGING_STOP") }
+            val expected = when (index) { 0 -> setOf("ORIGIN"); route.points.lastIndex -> setOf("RETURN", "DESTINATION"); else -> setOf("SCENIC_WAYPOINT", "CHARGING_STOP", "DESTINATION") }
             require(point.type in expected) { "잘못된 경로 지점 유형" }
         }
         // Each chunk contains at most two waypoints followed by its destination.

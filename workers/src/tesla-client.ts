@@ -49,7 +49,11 @@ export class TeslaClient {
     if(commands.length!==(strategy==='WAYPOINTS'?1:stops.length)||commands.some(c=>c.command!==(strategy==='WAYPOINTS'?'navigation_waypoints_request':'navigation_gps_request')))throw new Failure('UNSUPPORTED_COMMAND');
     const base=this.env.TESLA_COMMAND_PROXY_URL?httpsBase(this.env.TESLA_COMMAND_PROXY_URL):AUDIENCE;
     if(new URL(base).pathname!=='/')throw new Failure('NOT_CONFIGURED',503);
-    return commands.map(command=>async()=>this.request(base+path+'/command/'+command.command,{method:'POST',headers:{Authorization:`Bearer ${await this.access()}`,'Content-Type':'application/json'},body:JSON.stringify(command.body)},true));
+    return commands.map(command=>async()=>{
+      const token=await this.access();
+      if(!this.lease.data.commands)throw new Failure('PERMISSION_DENIED');
+      return this.request(base+path+'/command/'+command.command,{method:'POST',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify(command.body)},true);
+    });
   }
   private async request(url: string, init: RequestInit, command=false): Promise<unknown> {
     try {

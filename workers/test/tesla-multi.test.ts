@@ -142,15 +142,26 @@ it('maps signed public points then transmits one ordered batch through mocked Fl
   if(url.startsWith('https://places.googleapis.com/')){
    const p=points[Number(url.slice(-1))];return json({location:{latitude:p.latitude,longitude:p.longitude}});
   }
-  if(url.endsWith('/command/navigation_waypoints_request')){
+  if(url.endsWith('/command/navigation_waypoints_request')||url.endsWith('/command/navigation_gps_request')){
    commands.push(JSON.parse(String(init?.body)));return json({response:{result:true}});
   }
   if(url.endsWith('/vehicles/TEST-VIN'))return json({response:{state:'online'}});
   throw Error('unexpected transport');
  });
- const {planId}=await(await a.post('navigation/multi/preview',{ticket:proof})).json() as {planId:string};
+ const gps=await(await a.post('navigation/multi/preview',{ticket:proof})).json() as {planId:string};
+ const dry=await(await a.post('navigation/multi/dry-run',{planId:gps.planId})).json();
+ expect(dry).toMatchObject({strategy:'GPS_ORDERED',status:'DRY_RUN_VALIDATED',canSend:true,wireRequests:points.slice(1).map((p,i)=>({body:{lat:p.latitude,lon:p.longitude,order:i===0?0:2}})),blockers:[]});
+ expect(http).not.toHaveBeenCalled();
+ const gpsInput={planId:gps.planId,confirmAllStops:true,replaceNavigation:true};
+ expect(await(await a.post('navigation/multi/send',gpsInput)).json()).toMatchObject({commandStatus:'COMMAND_API_ACCEPTED',acceptedCommands:4,vehicleNavigationStatus:'VEHICLE_NAVIGATION_NOT_CONFIRMED'});
+ expect(commands.splice(0)).toEqual(points.slice(1).map((p,i)=>({lat:p.latitude,lon:p.longitude,order:i===0?0:2})));
+ await a.post('navigation/multi/confirm',{planId:gps.planId,matched:false,confirmedStopCount:0,confirmedVisitOrder:false});
+ http.mockClear();
+ const {planId}=await(await a.post('navigation/multi/preview',{ticket:proof,strategy:'WAYPOINTS'})).json() as {planId:string};
  expect(await(await a.post('navigation/multi/dry-run',{planId})).json()).toMatchObject({status:'DRY_RUN_BLOCKED',commandCount:0});expect(http).not.toHaveBeenCalled();
  for(const p of points.slice(1))expect(await(await a.post('navigation/multi/map-places',{planId,order:p.order})).json()).toMatchObject({googlePlaceCoverage:{matchedCount:p.order},commandStatus:'COMMAND_NOT_SENT'});
+ const tracked=await(await a.post('navigation/multi/dry-run',{planId})).json() as {mappingResults:{order:number;searchCalls:number;detailsCalls:number}[]};
+ expect(tracked.mappingResults.map(r=>[r.order,r.searchCalls,r.detailsCalls])).toEqual(points.slice(1).map(p=>[p.order,1,1]));
  const body={waypoints:points.slice(1).map(p=>'refId:SyntheticPlace'+p.order).join(',')};
  expect(await(await a.post('navigation/multi/dry-run',{planId})).json()).toMatchObject({wireRequests:[{body}],commandCount:1});
  const input={planId,confirmAllStops:true,replaceNavigation:true};

@@ -52,6 +52,7 @@ export interface Plan {
   multi?: {
     strategy: 'WAYPOINTS' | 'GPS_ORDERED'; ticket: string; itineraryHash: string;
     dryRunValidated: boolean; attemptedCommands: number; acceptedCommands: number;
+    mappingResults?:Array<{order:number;name:string;status:string;reason?:string;cached?:boolean;searchCalls:number;detailsCalls:number}>;
     totalCommands: number | null;
   };
   roadVerified?: boolean;

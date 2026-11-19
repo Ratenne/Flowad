@@ -24,7 +24,7 @@ it('deduplicates searches, enforces field masks, caches verified IDs and expires
 it('blocks private points, missing keys, ambiguous results and exhausted daily budgets',async()=>{
  const e={...env(),GOOGLE_PLACES_SEARCH_DAILY_LIMIT:'1'};
  const http=external(url=>url.endsWith(':searchText')?json({places:[{id:'SyntheticPlaceA'},{id:'SyntheticPlaceB'}]}):json({location:{latitude:35,longitude:129}}));
- expect((await mapGooglePlace({...poi,type:'RETURN'},e)).reason).toBe('PUBLIC_POI_REQUIRED');
+ expect((await mapGooglePlace({...poi,type:'RETURN',poiId:undefined},e)).reason).toBe('PUBLIC_POI_REQUIRED');
  expect((await mapGooglePlace(poi,{...e,GOOGLE_PLACES_KEY:undefined})).reason).toBe('GOOGLE_PLACES_NOT_CONFIGURED');
  expect(http).not.toHaveBeenCalled();
  expect((await mapGooglePlace(poi,e)).reason).toBe('GOOGLE_PLACE_MATCH_UNCERTAIN');

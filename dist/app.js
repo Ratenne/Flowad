@@ -801,10 +801,24 @@ $('#detailDialog').addEventListener('click',async e=>{
  if((!preview&&!dry&&!confirm&&!map&&!send)||navigationBusy||state.integration!=='tesla')return;
  const output=$('#teslaNavigationPreview'),button=preview||dry||confirm||map||send,origin=state.location;
  navigationBusy=true;button.disabled=true;
+ async function lookupPlaces(){
+    const current=navigationPlan;
+    output.querySelector('#teslaMultiResult').textContent='Google Maps에서 경유지 위치를 확인하고 있어요…';
+    const deadline=Date.now()+45000;
+    let updated=current;
+    for(const stop of current.googlePlaceCoverage.missing){
+     if(Date.now()>=deadline)break;
+     const result=await teslaPost('navigation/multi/map-places',{planId:current.planId,order:stop.order});
+     if(origin!==state.location||navigationPlan!==current)return;
+     updated=result;
+    }
+    navigationPlan={...current,...updated};output.innerHTML=multiPreviewMarkup(navigationPlan,current.courseId);
+ }
  try{
   if(preview){
    navigationPlan=null;navigationOrigin=null;
-   const course=recommendations.find(r=>r.id===preview.dataset.teslaMultiPreview),strategy=$('#teslaMultiStrategy')?.value||'WAYPOINTS';
+   const course=recommendations.find(r=>r.id===preview.dataset.teslaMultiPreview),strategy=preview.dataset.strategy||$('#teslaMultiStrategy')?.value||'GPS_ORDERED';
+   if(preview.dataset.strategy&&$('#teslaMultiStrategy'))$('#teslaMultiStrategy').value=strategy;
    if(!course?.navigationTicket)throw Error('INVALID_TICKET');
    const verified=await verifyRoad(course,output);if(!verified)return;
    output.textContent='검증된 전체 방문 순서를 준비하고 있어요…';
@@ -812,20 +826,11 @@ $('#detailDialog').addEventListener('click',async e=>{
    if(origin!==state.location||recommendations.find(r=>r.id===course.id)!==course)return;
    navigationPlan={...result,courseId:course.id};navigationOrigin=origin;
    output.innerHTML=result.requiresVehicleCheck?multiResultMarkup(result):multiPreviewMarkup(result,course.id);
+   if(!result.requiresVehicleCheck&&result.strategy==='WAYPOINTS'&&result.googlePlaceCoverage?.missing.length)await lookupPlaces();
   }else{
    if(navigationPlan?.mode!=='MULTI_STOP'||navigationOrigin!==state.location)throw Error('PLAN_EXPIRED');
    if(map){
-    const current=navigationPlan;
-    output.querySelector('#teslaMultiResult').textContent='Google Maps에서 경유지 위치를 확인하고 있어요…';
-    const deadline=Date.now()+45000,results=[];
-    let updated=current;
-    for(const stop of current.googlePlaceCoverage.missing){
-     if(Date.now()>=deadline)break;
-     const result=await teslaPost('navigation/multi/map-places',{planId:current.planId,order:stop.order});
-     if(origin!==state.location||navigationPlan!==current)return;
-     results.push(...result.mappingResults);updated=result;
-    }
-    navigationPlan={...current,...updated,mappingResults:results};output.innerHTML=multiPreviewMarkup(navigationPlan,current.courseId);
+    await lookupPlaces();
    }else if(send){
     if(!$('#multiConsent')?.checked)return;
     const result=await teslaPost('navigation/multi/send',{planId:navigationPlan.planId,confirmAllStops:true,replaceNavigation:true,confirmMappedPlaces:true});

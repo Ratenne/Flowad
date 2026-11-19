@@ -12,12 +12,12 @@ export type NavigationStrategy=z.infer<typeof navigationStrategy>;
 export const maxNavigationStops=16;
 // Internal visit indices are not Tesla's insertion enum. These values are
 // corroborated by the public protocol implementation; the pinned official SDK
-// contains no navigation GPS enum/message. Live use stays blocked separately.
+// contains no navigation GPS enum/message. Numeric values are corroborated by the public implementation.
 export const gpsInsertionOrder=Object.freeze({REPLACE:0,PREPEND:1,APPEND:2} as const);
 export const gpsOrderEvidence={publicImplementation:'Teslemetry/python-tesla-fleet-api',commit:'f7f39c8c2320ee3289a8a0242b3629e355ef532e',officialSdkCrossCheck:'ENUM_AND_COMMAND_ABSENT',officialSemanticsVerified:false} as const;
 const gpsBody=z.object({lat:z.number().min(-90).max(90),lon:z.number().min(-180).max(180),order:z.union([z.literal(0),z.literal(1),z.literal(2)])}).strict();
 const waypointBody=z.object({waypoints:z.string().regex(/^refId:[A-Za-z0-9_-]{10,512}(,refId:[A-Za-z0-9_-]{10,512})*$/)}).strict();
-export function multiCapabilities(env:Env){
+export function multiCapabilities(env:Env,stops?:Stop[]){
  const featureEnabled=['dry-run','enabled'].includes(env.TESLA_MULTI_STOP_MODE??''),live=env.TESLA_MULTI_STOP_MODE==='enabled'&&env.TESLA_MULTI_STOP_SEND_ENABLED==='true';
  return {featureEnabled,mode:!featureEnabled?'OFF':live?'EXPLICIT_CONSENT_REQUIRED':'DRY_RUN_ONLY',liveSendEnabled:live,
   commandStatus:'COMMAND_NOT_SENT',vehicleNavigationStatus:'VEHICLE_NAVIGATION_NOT_CONFIRMED',
@@ -26,11 +26,17 @@ export function multiCapabilities(env:Env){
   installedProxyVersion:'NOT_VERIFIED',sdk:navigationSdk,
   methods:([
    ['WAYPOINTS','navigation_waypoints_request'],['GPS_ORDERED','navigation_gps_request']
-  ] as const).map(([strategy,command])=>({strategy,command,endpointDocumented:true,
+  ] as const).map(([strategy,command])=>{
+ const blockers=[
+  ...(!live?[featureEnabled?'DRY_RUN_ONLY':'MULTI_STOP_FEATURE_DISABLED']:[]),
+  ...(env.TESLA_COMMAND_PROXY_URL?['PROXY_COMMAND_UNSUPPORTED']:[]),
+  ...(!stops?['ITINERARY_REQUIRED']:strategy==='WAYPOINTS'&&!googlePlaceCoverage(stops).complete?['GOOGLE_PLACE_IDS_REQUIRED']:[])
+ ];
+ return {strategy,command,endpointDocumented:true,
    schemaStatus:'REQUIRED_FIELDS_CONFIRMED',serializationAvailable:true,proxySupport:'UNSUPPORTED_AT_SDK_PIN',
    fulfillsSingleRequestGoal:strategy==='WAYPOINTS',...(strategy==='GPS_ORDERED'?{orderEvidence:gpsOrderEvidence}:{requiresVerifiedGooglePlaceIds:true}),
-   vehicleSupport:'NOT_VERIFIED',realVehicleVerified:false,canSend:strategy==='WAYPOINTS'&&live&&!env.TESLA_COMMAND_PROXY_URL,
-   transportStatus:env.TESLA_COMMAND_PROXY_URL?'EXISTING_PROXY_COMMAND_SUPPORT_UNCONFIRMED':'DOCUMENTED_FLEET_REST_VEHICLE_MAY_REQUIRE_SIGNING'}))};
+   vehicleSupport:'NOT_VERIFIED',realVehicleVerified:false,blockers,canSend:blockers.length===0,
+   transportStatus:env.TESLA_COMMAND_PROXY_URL?'EXISTING_PROXY_COMMAND_SUPPORT_UNCONFIRMED':'DOCUMENTED_FLEET_REST_VEHICLE_MAY_REQUIRE_SIGNING'};})};
 }
 export function requireMultiFeature(env:Env){if(!['dry-run','enabled'].includes(env.TESLA_MULTI_STOP_MODE??''))throw new Failure('MULTI_STOP_FEATURE_DISABLED');}
 export function multiNavigationOutcome(p:Plan){
@@ -86,29 +92,30 @@ export const navigationAdapters:Record<NavigationStrategy,NavigationCommandAdapt
  }},
  GPS_ORDERED:{strategy:'GPS_ORDERED',command:'navigation_gps_request',serialize(stops){
   validateStops(stops);
-  return stops.map((p,i)=>({command:'navigation_gps_request',body:gpsBody.parse({lat:p.latitude,lon:p.longitude,order:i===0?gpsInsertionOrder.REPLACE:gpsInsertionOrder.APPEND})}));
+  return stops.map((p,index)=>({command:'navigation_gps_request',body:gpsBody.parse({lat:p.latitude,lon:p.longitude,order:index===0?gpsInsertionOrder.REPLACE:gpsInsertionOrder.APPEND})}));
  }}
 };
 export function navigationDryRun(stops:Stop[],strategy:NavigationStrategy,env:Env){
  requireMultiFeature(env);
  validateStops(stops);
  const coverage=googlePlaceCoverage(stops);
+ const capabilities=multiCapabilities(env,stops);
+ const blockers=capabilities.methods.find(method=>method.strategy===strategy)!.blockers;
+ const vehicleSupport='NOT_VERIFIED';
  if(strategy==='WAYPOINTS'&&!coverage.complete)return {status:'DRY_RUN_BLOCKED',scope:'SINGLE_REQUEST_PLACE_ID_COVERAGE',
   strategy,command:navigationAdapters[strategy].command,stopCount:stops.length,commandCount:0,schemaValidated:false,wireRequests:[],
   fulfillsSingleRequestGoal:false,commandStatus:'COMMAND_NOT_SENT',vehicleNavigationStatus:'VEHICLE_NAVIGATION_NOT_CONFIRMED',
-  canSend:false,googlePlaceCoverage:coverage,blockers:['GOOGLE_PLACE_IDS_REQUIRED'],capabilities:multiCapabilities(env)};
+  canSend:false,googlePlaceCoverage:coverage,blockers,vehicleSupport,capabilities};
  const commands=navigationAdapters[strategy].serialize(stops);
  return {status:'DRY_RUN_VALIDATED',scope:'SIGNED_ITINERARY_AND_WIRE_PLAN',
   commandStatus:'COMMAND_NOT_SENT',vehicleNavigationStatus:'VEHICLE_NAVIGATION_NOT_CONFIRMED',
   strategy,command:navigationAdapters[strategy].command,stopCount:stops.length,
-  schemaValidated:true,wireRequests:commands,commandCount:commands.length,fulfillsSingleRequestGoal:strategy==='WAYPOINTS'&&commands.length===1,googlePlaceCoverage:coverage,orderSemanticsVerifiedOfficially:strategy==='GPS_ORDERED'?false:null,canSend:multiCapabilities(env).methods.find(m=>m.strategy===strategy)!.canSend,blockers:[...(strategy==='GPS_ORDERED'?['GPS_ORDER_OFFICIAL_CROSSCHECK_PENDING']:[]),...(env.TESLA_COMMAND_PROXY_URL?['PROXY_COMMAND_UNSUPPORTED']:[]),'VEHICLE_SUPPORT_UNCONFIRMED'],
-  capabilities:multiCapabilities(env)};
+  schemaValidated:true,wireRequests:commands,commandCount:commands.length,fulfillsSingleRequestGoal:strategy==='WAYPOINTS'&&commands.length===1,googlePlaceCoverage:coverage,orderSemanticsVerifiedOfficially:strategy==='GPS_ORDERED'?false:null,canSend:blockers.length===0,blockers,vehicleSupport,capabilities};
 }
 export function requireMultiSend(env:Env,strategy:NavigationStrategy,stops:Stop[]):ReadonlyArray<NavigationWireCommand>{
  requireMultiFeature(env);
  if(env.TESLA_MULTI_STOP_MODE!=='enabled'||env.TESLA_MULTI_STOP_SEND_ENABLED!=='true')throw new Failure('MULTI_STOP_SEND_DISABLED');
  const commands=navigationAdapters[strategy].serialize(stops);
- if(strategy==='GPS_ORDERED')throw new Failure('GPS_ORDER_OFFICIAL_CROSSCHECK_PENDING');
  // Respect an existing configured proxy: the inspected official proxy does
  // not forward these unknown commands. Never bypass it automatically.
  if(env.TESLA_COMMAND_PROXY_URL)throw new Failure('PROXY_COMMAND_UNSUPPORTED');
@@ -131,10 +138,11 @@ export async function dispatchNavigation(commands:ReadonlyArray<()=>Promise<unkn
  for(const command of commands){
   state.attemptedCommands++;state.pending=true;state.error='COMMAND_RESULT_UNKNOWN';
   await checkpoint({...state});
+  let rejectionCode:string|undefined;
   let result:'ACCEPTED'|'REJECTED'|'UNKNOWN';
-  try{result=commandAcceptance(await command());}catch(e){result=e instanceof Failure&&['PERMISSION_DENIED','REAUTH_REQUIRED','UNSUPPORTED_COMMAND','COMMAND_PROTOCOL_REQUIRED','PAYMENT_REQUIRED','PRECONDITION_FAILED','INCORRECT_REGION','NO_DATA','REQUEST_FAILED'].includes(e.code)?'REJECTED':'UNKNOWN';}
-  if(result==='ACCEPTED'){state.acceptedCommands++;delete state.error;}
-  else{state.status='API_FAILED';state.error=result==='UNKNOWN'?'COMMAND_RESULT_UNKNOWN':state.acceptedCommands?'PARTIAL_COMMAND_ACCEPTANCE':'COMMAND_REJECTED';state.pending=result==='UNKNOWN'||state.acceptedCommands>0;await checkpoint({...state});return state;}
+  try{result=commandAcceptance(await command());}catch(e){if(e instanceof Failure&&['UNSUPPORTED_COMMAND','COMMAND_PROTOCOL_REQUIRED'].includes(e.code))rejectionCode=e.code;result=e instanceof Failure&&['PERMISSION_DENIED','REAUTH_REQUIRED','UNSUPPORTED_COMMAND','COMMAND_PROTOCOL_REQUIRED','PAYMENT_REQUIRED','PRECONDITION_FAILED','INCORRECT_REGION','NO_DATA','REQUEST_FAILED'].includes(e.code)?'REJECTED':'UNKNOWN';}
+  if(result==='ACCEPTED'){state.acceptedCommands++;delete state.error;if(state.acceptedCommands<state.totalCommands)await checkpoint({...state});}
+  else{state.status='API_FAILED';state.error=result==='UNKNOWN'?'COMMAND_RESULT_UNKNOWN':state.acceptedCommands?'PARTIAL_COMMAND_ACCEPTANCE':rejectionCode??'COMMAND_REJECTED';state.pending=result==='UNKNOWN'||state.acceptedCommands>0;await checkpoint({...state});return state;}
  }
  state.status='API_ACCEPTED';state.pending=true;await checkpoint({...state});return state;
 }

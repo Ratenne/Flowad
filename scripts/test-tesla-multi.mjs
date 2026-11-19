@@ -6,9 +6,11 @@ const fixture={planId:'MOCK_PLAN',mode:'MULTI_STOP',status:'PREVIEW_READY',comma
 assert.equal(multiEntryMarkup('dyn-test',false),'');assert.match(multiEntryMarkup('dyn-test',true),/data-tesla-multi-preview/);
 const markup=multiPreviewMarkup(fixture,'dyn-test');
 assert.ok(markup.indexOf('합성 풍경')<markup.indexOf('합성 목적지'));assert.ok(markup.indexOf('합성 목적지')<markup.indexOf('합성 복귀'));
-assert.match(markup,/<button[^>]*disabled>전체 코스 보내기/);assert.doesNotMatch(markup,/35\.18|129\.07|HMAC|MOCK_PLAN/);
+assert.doesNotMatch(markup,/data-multi-send/);assert.doesNotMatch(markup,/35\.18|129\.07|HMAC|MOCK_PLAN/);
 assert.match(multiPreviewMarkup({...fixture,origin:{name:'<script>test</script>'}},'dyn-test'),/&lt;script&gt;/);
 assert.match(multiResultMarkup({status:'DRY_RUN_VALIDATED',commandStatus:'COMMAND_NOT_SENT'}),/차량 명령 미전송/);
+const gpsReview=multiResultMarkup({...fixture,strategy:'GPS_ORDERED',status:'DRY_RUN_VALIDATED',canSend:true});
+assert.match(gpsReview,/id="multiConsent"/);assert.match(gpsReview,/data-multi-send/);assert.doesNotMatch(gpsReview,/query_place_id/);
 assert.match(multiResultMarkup({commandStatus:'COMMAND_API_ACCEPTED'}),/차량 내비 반영 미확인/);
 assert.match(multiResultMarkup({commandStatus:'COMMAND_REJECTED',error:'PARTIAL_COMMAND_ACCEPTANCE'}),/전체 코스 전송 완료가 아니/);
 assert.match(multiResultMarkup({commandStatus:'COMMAND_RESULT_UNKNOWN',requiresVehicleCheck:true}),/모든 경유지와 방문 순서/);

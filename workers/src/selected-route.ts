@@ -13,7 +13,7 @@ export async function verifySelected(input:z.infer<typeof selectedRequest>,env:E
  const saved=await resolve(input.ticket,env.NAVIGATION_TICKET_SECRET),first=saved.route.points[0],last=saved.route.points.at(-1)!;
  if(first.type!=='ORIGIN'||!['RETURN','DESTINATION'].includes(last.type))throw new Failure('INVALID_TICKET');
  if(saved.courseId.startsWith('dyn-')){
-  if(saved.route.status!=='ROAD_ROUTED'||saved.route.points.some(p=>p.verification==='NO_CAR_ACCESS'))throw new Failure('ROAD_ROUTE_REQUIRED');
+  if(!['ROAD_ROUTED','ESTIMATED_NOT_ROAD_ROUTED'].includes(saved.route.status)||saved.route.points.some(p=>p.verification==='NO_CAR_ACCESS')||!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   const stopCount=saved.route.points.filter(p=>p.type==='SCENIC_WAYPOINT'||p.type==='DESTINATION').length;
   const route=finish(saved.route.points,await road(saved.route.points,env,true),stopCount*(input.walking===false?600:1200),'DYNAMIC_ROUTE',['도로 연결 재검증이며 명소 진입·주차는 미확인입니다.']);
   if(route.status!=='ROAD_ROUTED')throw new Failure('ROAD_ROUTE_REQUIRED');

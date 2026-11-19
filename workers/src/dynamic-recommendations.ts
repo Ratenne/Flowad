@@ -2,10 +2,16 @@ import type {Env,Point,Route} from './types';
 import {distance,Failure,hash,httpsBase} from './utils';
 import {readyTable} from './road-readiness';
 import {nearby,type Poi} from './poi';
-import {finish,point,roadSimplified} from './routing';
+import {finish,point} from './routing';
 import {issue} from './tickets';
 import {battery,type Input} from './recommendations';
 export const dynamicPolicy=Object.freeze({candidates:20,beamWidth:14,routeChecks:5,results:5,tableMs:8000,totalMs:110000,maxSnapMeters:100,maxDetour:4});
+// Discovery estimates only: never represented as road connectivity or geometry.
+export const discoveryPolicy=Object.freeze({distanceFactor:1.3,speedKmh:45});
+function estimatedMatrix(points:Point[]){
+ const distances=points.map(a=>points.map(b=>distance(a.latitude,a.longitude,b.latitude,b.longitude)*1000*discoveryPolicy.distanceFactor));
+ return {distances,durations:distances.map(row=>row.map(m=>m/1000/discoveryPolicy.speedKmh*3600))};
+}
 function base(env:Env){
  if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_PROVIDER_NOT_CONFIGURED',503);
  const u=new URL(env.ROAD_ROUTING_URL);
@@ -71,7 +77,7 @@ function evaluate(r:Input,stops:Poi[],seconds:number,meters:number){
 function overlap(a:number[],b:number[]){const set=new Set(a);return b.filter(x=>set.has(x)).length/Math.max(a.length,b.length);}
 export async function generate(r:Input,env:Env,signal?:AbortSignal){
  if(signal?.aborted)throw new Failure('RECOMMENDATION_CANCELLED',503);
- base(env);const started=performance.now();let poiQueries=0,tableCalls=0,routeCalls=0;
+ const started=performance.now();let poiQueries=0;const tableCalls=0,routeCalls=0;
  const diagnostics=()=>({poiQueries,tableCalls,routeCalls,elapsedMs:Math.round(performance.now()-started)});
  if(unsafe(r,[]))return {courses:[],weatherExcluded:1,timeExcluded:0,routingFailed:0,status:'WEATHER_UNSAFE',guidance:'출발지의 위험 기상 조건으로 추천하지 않았습니다.',diagnostics:diagnostics()};
  let candidates:Poi[]=[];
@@ -83,7 +89,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  const empty=(status:string,guidance:string)=>({courses:[],status,guidance,weatherExcluded:0,timeExcluded:0,routingFailed:0,diagnostics:diagnostics()});
  if(!candidates.length)return empty('NO_NEARBY_POIS','주변 공개 POI 데이터가 없거나 접근 제한으로 제외됐습니다. 수집 상태와 출발지를 확인해 주세요.');
  // Dense city centres must not consume the entire matrix with adjacent parks.
- // Each annulus is still RTree bounded; only the final 20 enter OSRM Table.
+ // Each annulus is still RTree bounded; the final 20 enter the local search.
  if(!r.poiIds&&r.availableMinutes>=60&&candidates.length>=6){
   const middle=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.25);poiQueries++;
   const outer=await nearby(env,r.latitude,r.longitude,initial,7,undefined,initial*.6);poiQueries++;
@@ -97,7 +103,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
  const stopPoints=candidates.map((p,i)=>({...point(i+1,'SCENIC_WAYPOINT',p.name,p.access_latitude,p.access_longitude),source:p.provider,verification:p.access_status,originalSnapDistanceMeters:null}));
  const returnPoint=point(stopPoints.length+1,r.roundTrip===false?'DESTINATION':'RETURN','복귀 지점',r.returnLatitude??r.latitude,r.returnLongitude??r.longitude);
  const points=[origin,...stopPoints,returnPoint];
- tableCalls++;const table=await matrix(points,env,signal);
+ const table=estimatedMatrix(points);
  const end=points.length-1,roundTrip=r.roundTrip!==false;
  let beam:Plan[]=[{indices:[],seconds:0,meters:0,score:0}],plans:Plan[]=[];
  for(let depth=0;depth<3;depth++){
@@ -127,7 +133,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
   const sameDirection=Math.max(0,(ax*bx+ay*by)/Math.max(.00000001,Math.hypot(ax,ay)*Math.hypot(bx,by)));
   return .75*overlap(a.indices,b.indices)+.25*sameDirection;
  };
- while(plans.length&&selected.length<dynamicPolicy.routeChecks){
+ while(plans.length&&selected.length<dynamicPolicy.results){
   plans.sort((a,b)=>(b.score-35*Math.max(0,...selected.map(s=>similarity(b,s))))-(a.score-35*Math.max(0,...selected.map(s=>similarity(a,s)))));
   selected.push(plans.shift()!);
  }
@@ -141,15 +147,12 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
   if(roundTrip)routePoints.push({...returnPoint});
   else routePoints[routePoints.length-1]={...routePoints.at(-1)!,type:'DESTINATION'};
   routePoints.forEach((p,i)=>p.order=i);
-  let route:Route;
-  try{
-   routeCalls++;
-   route=finish(routePoints,await roadSimplified(routePoints,env,signal),pois.length*(r.walking===false?600:1200),'DYNAMIC_ROUTE',[
-    'OSM 도로 연결 검증이며 현재 통행·명소 진입·주차 가능성을 보장하지 않습니다.',
-    '공개 POI 유형과 메타데이터 기반 점수는 경관 품질 실측이 아닙니다.'
-   ]);
-  }catch(e){if(e instanceof Failure&&e.code==='ROAD_PROVIDER_CHALLENGE')throw e;routingFailed++;continue;}
-  if(route.status!=='ROAD_ROUTED'){routingFailed++;continue;}
+  const legs=routePoints.slice(1).map((_,i)=>{const a=plan.indices[i-1]??0,b=plan.indices[i]??end;return {fromOrder:i,toOrder:i+1,distanceKm:table.distances[a][b]/1000,durationSeconds:Math.ceil(table.durations[a][b]),geometry:null};});
+  const route:Route=finish(routePoints,{legs,status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'GEOGRAPHIC_ESTIMATE',geometryStatus:'NOT_AVAILABLE'},pois.length*(r.walking===false?600:1200),'UNAVAILABLE',[
+   '거리·시간은 직선거리 보정 기반 추정입니다. 실제 도로 연결·진입·주차는 확인되지 않았습니다.',
+   '선택한 코스의 도로 확인 후 실제 도로 거리·시간과 경로선을 확인할 수 있습니다.',
+   '공개 POI 유형과 메타데이터 기반 점수는 경관 품질 실측이 아닙니다.'
+  ]);
   if(route.totalSeconds>r.availableMinutes*60){timeExcluded++;continue;}
   const direct=routePoints.slice(1).reduce((s,p,i)=>s+distance(routePoints[i].latitude,routePoints[i].longitude,p.latitude,p.longitude),0);
   if(route.distanceKm>Math.max(10,direct*dynamicPolicy.maxDetour)){routingFailed++;continue;}
@@ -159,12 +162,12 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
   const sources=[...new Set(pois.map(p=>p.provider))];
   courses.push({id,name:pois.map(p=>p.name).join(' · '),description:`${pois.length}개 공개 명소를 잇는 ${roundTrip?'왕복':'편도'} 드라이브`,scenery:pois[0].scenery,region:pois[0].region,
    latitude:pois[0].latitude,longitude:pois[0].longitude,score:evaluation.score,scoreComponents:evaluation.components,scoreStatus:'METADATA_ESTIMATE',
-   reasons:['주변 POI와 실제 도로 이동시간으로 구성했어요.',`정차 ${route.stopSeconds/60}분을 별도로 반영했어요.`,...warnings],
+   reasons:['현재 위치 주변 POI와 추정 이동시간으로 구성했어요.',`정차 ${route.stopSeconds/60}분을 별도로 반영했어요.`,...warnings],
    estimatedRoundTripKm:route.distanceKm,estimatedMinutes:Math.ceil(route.totalSeconds/60),drivingMinutes:Math.ceil(route.drivingSeconds/60),stopMinutes:route.stopSeconds/60,
    waypoints:pois.map(p=>({id:p.id,name:p.name,latitude:p.latitude,longitude:p.longitude,accessLatitude:p.access_latitude,accessLongitude:p.access_longitude,accessStatus:p.access_status,accessKind:p.access_kind,description:p.description??'',source:p.provider,sourceUpdatedAt:p.source_updated_at})),
-   distanceTimeStatus:route.status,batteryStatus:status,vehicleTransferAllowed:true,vehicleTransferCondition:'EXPLICIT_USER_APPROVAL_AND_VEHICLE_PREVIEW_REQUIRED',
+   distanceTimeStatus:route.status,batteryStatus:status,vehicleTransferAllowed:false,vehicleTransferCondition:'ROAD_VERIFICATION_THEN_EXPLICIT_USER_APPROVAL_REQUIRED',
    dataSource:{course:sources.join(' + '),distanceTime:route.provider,weather:(r.courseWeather?.[id]??r.weather)?.source??'예시 날씨',weatherObservedAt:(r.courseWeather?.[id]??r.weather)?.observedAt??null,generatedAt:route.generatedAt,attribution:'© OpenStreetMap contributors (ODbL); 한국관광공사 TourAPI (해당 자료)'},
    route,navigationTicket:await issue(id,route,env.NAVIGATION_TICKET_SECRET)});
  }
- return {courses,weatherExcluded,timeExcluded,routingFailed,status:courses.length?'ROAD_ROUTED':routingFailed?'ROAD_PROVIDER_UNAVAILABLE':'NO_FEASIBLE_ROUTE',guidance:courses.length?'실제 도로 연결을 확인한 동적 코스입니다. 명소 진입·주차는 별도 확인하세요.':'조건을 충족하는 도로 코스를 만들지 못했습니다. 시간을 늘리거나 잠시 후 재시도하세요.',diagnostics:diagnostics()};
+ return {courses,weatherExcluded,timeExcluded,routingFailed,status:courses.length?'ESTIMATED_NOT_ROAD_ROUTED':'NO_FEASIBLE_ROUTE',guidance:courses.length?'주변 공개 POI 기반 추천입니다. 거리·시간은 추정이며 선택한 코스의 도로 확인이 필요합니다.':'조건을 충족하는 코스를 만들지 못했습니다. 출발지나 여정 시간을 조정하세요.',diagnostics:diagnostics()};
 }

@@ -1,4 +1,9 @@
 const finite=v=>typeof v==='number'&&Number.isFinite(v);
+export function applyVerifiedRoute(course,result){
+ if(result.roadVerified!==true||result.route?.status!=='ROAD_ROUTED'||!result.navigationTicket)throw Error('ROAD_VERIFICATION_REQUIRED');
+ const minutes=Math.ceil(result.route.totalSeconds/60);
+ return {...course,route:result.route,navigationTicket:result.navigationTicket,km:result.route.distanceKm,estimatedRoundTripKm:result.route.distanceKm,estimatedMinutes:minutes,minutes,apiMinutes:minutes,drivingMinutes:Math.ceil(result.route.drivingSeconds/60),stopMinutes:result.route.stopSeconds/60,batteryStatus:result.batteryStatus,distanceTimeStatus:'ROAD_ROUTED',vehicleTransferAllowed:true,dataSource:{...course.dataSource,distanceTime:result.route.provider}};
+}
 export function arrivalTimes(course,departure){
  let time=departure;
  const stopSeconds=(course.route?.stopSeconds??0)/Math.max(1,course.waypoints?.length??0);

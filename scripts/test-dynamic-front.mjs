@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
-import {courseFromApi,bookmarkTemplate,restoreBookmarks,arrivalTimes} from '../dist/dynamic-courses.js';
+import {courseFromApi,bookmarkTemplate,restoreBookmarks,arrivalTimes,applyVerifiedRoute} from '../dist/dynamic-courses.js';
 import {routeWindow,dynamicTerrain} from '../dist/dynamic-terrain.js';
 import {makeTerrainModel,makeLatestTerrainLoader} from '../dist/terrain-model.js';
 const item={id:'dyn-new-id-never-in-catalog',name:'새 전국 명소',scenery:'forest',region:'테스트 지역',latitude:37.5,longitude:127,
  estimatedRoundTripKm:100,estimatedMinutes:180,stopMinutes:20,reasons:['테스트'],waypoints:[{id:'osm:node:1',name:'공개 명소',latitude:37.5,longitude:127}],
  navigationTicket:'must-not-persist',route:{status:'ROAD_ROUTED',generatedAt:'2026-11-16T00:00:00Z',points:[{name:'개인 출발지',latitude:37.6,longitude:127,type:'ORIGIN'},{name:'공개 명소',latitude:37.5,longitude:127,type:'SCENIC_WAYPOINT'},{name:'복귀',latitude:37.6,longitude:127,type:'RETURN'}],legs:[{geometry:[{latitude:37.6,longitude:127},{latitude:37.5,longitude:127},{latitude:37.6,longitude:127}]}]}};
 const course=courseFromApi(item);assert.equal(course.name,item.name);assert.equal(course.km,100);
+const estimate=courseFromApi({...item,route:{...item.route,status:'ESTIMATED_NOT_ROAD_ROUTED',geometryStatus:'NOT_AVAILABLE',legs:[{geometry:null}]},vehicleTransferAllowed:false});
+assert.equal(estimate.route.status,'ESTIMATED_NOT_ROAD_ROUTED');assert.equal(estimate.vehicleTransferAllowed,false);
+assert.throws(()=>applyVerifiedRoute(estimate,{roadVerified:false,route:item.route}),/ROAD_VERIFICATION_REQUIRED/);
+const verified=applyVerifiedRoute(estimate,{roadVerified:true,navigationTicket:'verified-ticket',route:{...item.route,distanceKm:123,totalSeconds:7200,drivingSeconds:6000,stopSeconds:1200,provider:'OSRM / OpenStreetMap'}});
+assert.equal(verified.km,123);assert.equal(verified.apiMinutes,120);assert.equal(verified.vehicleTransferAllowed,true);assert.equal(estimate.km,100);
 assert.deepEqual(arrivalTimes({...course,route:{...course.route,stopSeconds:1200,legs:[{durationSeconds:600},{durationSeconds:1200}]}},0),[0,600000,3000000]);
 assert.throws(()=>courseFromApi({...item,id:'\" onclick=alert(1)'}));
 const template=bookmarkTemplate(course),serialized=JSON.stringify(template);

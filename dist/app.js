@@ -3,7 +3,7 @@ import {detectLocationEnvironment, locationProvider, createNativeLocationService
 import {assessBattery} from './battery.js';
 import {weatherAt,departureTimestamp} from './engine.js';
 import {requestWeather,weatherFailureMessage} from './weather-client.js';
-import {courseFromApi,bookmarkTemplate,restoreBookmarks,bookmarkCourse,arrivalTimes} from './dynamic-courses.js';
+import {courseFromApi,bookmarkTemplate,restoreBookmarks,bookmarkCourse,arrivalTimes,applyVerifiedRoute} from './dynamic-courses.js';
 let routes=[];
 import {startTeslaLogin} from './tesla-login.js';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -117,7 +117,7 @@ async function updateResults(){
  if(!state.location){recommendations=[];render();return}
  const controller=new AbortController(); recommendationAbort=controller; const timer=setTimeout(()=>controller.abort(),120000);
  state.recommendationLoading=true;
- recommendations=[];sceneAPI?.clear?.();render();$('#noMatch').hidden=true;$('#resultStatus').textContent='추천 코스를 찾고 있어요… 도로 서버가 휴면 상태이면 준비에 약 1분이 걸릴 수 있어요.';
+ recommendations=[];sceneAPI?.clear?.();render();$('#noMatch').hidden=true;$('#resultStatus').textContent='현재 위치 주변 명소로 추천 코스를 구성하고 있어요…';
  const toWeather=w=>({condition:w.weather,temperatureC:w.temp,windMps:w.wind,severe:!!w.severe,source:state.weatherSource==='live'?(w.scope==='origin'?'Open-Meteo origin forecast':'Open-Meteo forecast'):state.weatherSource==='manual'?'user input':'example',observedAt:w.time?new Date(w.time).toISOString():null});
  const courseWeather=Object.fromEntries(effectiveRoutes().map(r=>[r.id,toWeather(weatherFor(r))]));
  const body={requestId:crypto.randomUUID(),originSource:state.location.kind,roundTrip:$('#tripMode').value!=='oneway',poiIds:state.savedPoiIds,latitude:state.location.lat,longitude:state.location.lng,availableMinutes:+$('#duration').value,scenery:state.mood,vehicleType:state.vehicle,batteryPercent:state.vehicle==='ev'?+$('#battery').value:null,estimatedRangeKm:state.vehicle==='ev'?+$('#range').value:null,weather:toWeather({weather:state.weather,temp:state.temp,wind:state.wind,severe:state.originSevere}),courseWeather,originSevere:!!state.originSevere,walking:$('#walking').checked,departure:$('#departure').value};
@@ -570,6 +570,7 @@ async function verifyRoad(r,output){
   if(!response.ok||data.roadVerified!==true)throw Error(data.error||'ROAD_VERIFICATION_REQUIRED');
   if(origin!==state.location||recommendations.find(x=>x.id===r.id)!==r)return null;
   if(output)output.innerHTML=verifiedRoadHtml(data,r);
+  Object.assign(r,applyVerifiedRoute(r,data));render();syncSelection();
   return data;
  }catch(e){if(output)output.innerHTML=`<p>도로 검증 불가 · ${safeText(navigationErrors[e.message]||'도로 서버가 기동 중이거나 응답하지 않습니다.')} 기본 추천은 유지되며 차량 전송은 허용되지 않습니다.</p><button class="button-secondary" data-road-verify="${safeText(r.id)}">도로 확인 다시 시도</button>`;throw e;}finally{clearTimeout(timer)}
 }

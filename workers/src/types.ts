@@ -14,6 +14,7 @@ export interface Env {
   OSRM_BATCH_URL?: string;
   OSRM_BATCH_TOKEN?: string;
   JUSO_MAP_API_KEY?: string;
+  NAVER_MAP_KEY_ID?: string;
   ALLOWED_ORIGINS: string;
   FRONTEND_URL: string;
   API_PREFIX?: string;

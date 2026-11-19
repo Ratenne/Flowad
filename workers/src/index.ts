@@ -7,7 +7,7 @@ import { charging } from './charging';
 import { locations } from './location';
 const methods:Record<string,'GET'|'POST'>={
   '/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST','/api/charging/recommendations':'POST',
-  '/api/location/address':'POST','/api/location/juso-map':'POST',
+  '/api/location/address':'POST','/api/location/map-config':'GET',
   ...Object.fromEntries(['status','callback','authorize','disconnect','vehicles','select','reading','location','navigation/preview','navigation/destination/preview','navigation/send','navigation/confirm'].map(p=>['/api/tesla/'+p,p==='status'||p==='callback'?'GET':'POST'])) as Record<string,'GET'|'POST'>
 };
 export const app=createApiApp(methods);

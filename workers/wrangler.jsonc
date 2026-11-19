@@ -1,6 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "flowad-api",
+  "keep_vars": true,
   "account_id": "8840227b6eb94fdbb655f3a662bf55d8",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-12",

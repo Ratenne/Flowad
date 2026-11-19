@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8">
   <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://cloudflareinsights.com; img-src 'self' data: blob:; object-src 'none'; base-uri 'none'; frame-src 'self'; form-action 'self'">
+    content="default-src 'self'; script-src 'self' https://static.cloudflareinsights.com https://oapi.map.naver.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://api.open-meteo.com https://cloudflareinsights.com https://*.map.naver.com https://*.map.naver.net; img-src 'self' data: blob: https://*.map.naver.com https://*.map.naver.net https://*.pstatic.net; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self'">
   <meta name="referrer" content="same-origin">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#151c19">
@@ -265,9 +265,9 @@
         <div class="location-setting"><span id="locationStatus" role="status">현재 위치를 확인해 주세요.</span><button
             id="manualLocation">출발 지역 직접 설정<svg>
               <use href="#i-arrow" />
-            </svg></button></div><button type="button" class="button-secondary" id="jusoMapButton" hidden>공식 주소 지도
+            </svg></button></div><button type="button" class="button-secondary" id="naverMapButton" hidden>네이버 지도
           확인</button>
-        <p class="settings-note">현재 주소 확인 시 좌표를 주소기반산업지원서비스로 전달합니다. 공식 주소 지도도 같은 서비스를 사용합니다.</p>
+        <p class="settings-note">주소는 도로명주소 서비스로 조회합니다. 지도 열기를 누르면 선택한 출발 위치 주변을 네이버 지도에서 표시합니다.</p>
         <p class="settings-note">위치는 추천 서버로 전송하며 저장하지 않습니다. 날씨 조회에는 약 1km 단위 좌표를 Open-Meteo에 전송합니다.</p>
       </section>
       <section id="settingsVehicle" class="settings-page" role="tabpanel" aria-labelledby="tabVehicle" hidden>
@@ -386,18 +386,15 @@
       <p class="settings-note">선택한 지역의 중심 좌표로 전국 공개 명소와 도로를 검색합니다. 실제 출발 위치와 차이가 있을 수 있습니다.</p>
     </div>
   </dialog>
-  <dialog id="jusoMapDialog" class="about-dialog" aria-labelledby="jusoMapTitle">
+  <dialog id="naverMapDialog" class="about-dialog" aria-labelledby="naverMapTitle">
     <header class="dialog-header">
-      <h2 id="jusoMapTitle">공식 주소 지도</h2><button class="dialog-close" data-close="jusoMapDialog" aria-label="지도 닫기"><svg
+      <h2 id="naverMapTitle">네이버 지도 · 출발 위치</h2><button class="dialog-close" data-close="naverMapDialog" aria-label="지도 닫기"><svg
           aria-hidden="true">
           <use href="#i-close" />
         </svg></button>
     </header>
-    <iframe id="jusoMapFrame" name="jusoMapFrame" title="주소기반산업지원서비스 지도" sandbox="allow-scripts"
-      style="display:block;width:100%;height:55vh;border:0;background:#fff"></iframe>
-    <form id="jusoMapForm" action="./api/location/juso-map" method="post" target="jusoMapFrame" hidden>
-      <input type="hidden" name="latitude"><input type="hidden" name="longitude">
-    </form>
+    <p id="naverMapStatus" role="status" aria-live="polite"></p>
+    <div id="naverMap" role="region" aria-label="선택한 출발 위치의 네이버 지도" style="width:100%;height:55vh;background:#fff"></div>
   </dialog>
   <dialog id="aboutDialog" class="about-dialog">
     <header class="dialog-header">

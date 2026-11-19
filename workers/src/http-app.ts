@@ -21,8 +21,7 @@ export function createApiApp(methods:Record<string,'GET'|'POST'>){
   const method=methods[c.req.path];
   if(method&&c.req.method!==method){c.header('Allow',method);return c.json({error:'METHOD_NOT_ALLOWED'},405);}
   const contentType=(c.req.header('Content-Type')??'').split(';')[0].toLowerCase();
-  if(c.req.path==='/api/location/juso-map'&&contentType!=='application/x-www-form-urlencoded')return c.json({error:'UNSUPPORTED_MEDIA_TYPE'},415);
-  const jsonBody=method==='POST'&&!['/api/location/juso-map','/api/tesla/authorize','/api/tesla/disconnect','/api/tesla/vehicles','/api/tesla/reading','/api/tesla/location'].includes(c.req.path);
+  const jsonBody=method==='POST'&&!['/api/tesla/authorize','/api/tesla/disconnect','/api/tesla/vehicles','/api/tesla/reading','/api/tesla/location'].includes(c.req.path);
   if(jsonBody&&contentType!=='application/json'&&!/^application\/[\w.+-]+\+json$/.test(contentType))return c.json({error:'UNSUPPORTED_MEDIA_TYPE'},415);
   await next();
  });

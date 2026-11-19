@@ -207,6 +207,7 @@ console.log('PASS: mocked app progress, preserved results, manual edit/late call
 const addressLookups = [];
 const addressContext = vm.createContext({
   state: {location: null}, locationRevision: 0, addressAbort: null,
+  createNaverMapView:()=>({show(){},close(){}}),window:{addEventListener(){}},
   $: get, AbortController, setTimeout, clearTimeout,
   fetch(url, options) {
     assert.equal(url, './api/location/address');

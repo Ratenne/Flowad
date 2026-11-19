@@ -3,6 +3,7 @@ import {detectLocationEnvironment, locationProvider, createNativeLocationService
 import {assessBattery} from './battery.js';
 import {weatherAt,departureTimestamp} from './engine.js';
 import {requestWeather,weatherFailureMessage} from './weather-client.js';
+import {createNaverMapView} from './naver-map.js';
 import {courseFromApi,bookmarkTemplate,restoreBookmarks,bookmarkCourse,arrivalTimes,applyVerifiedRoute} from './dynamic-courses.js';
 let routes=[];
 import {startTeslaLogin} from './tesla-login.js';
@@ -201,21 +202,19 @@ function paintLocation(location){
  const measured=Number.isFinite(location.observedAt)?new Date(location.observedAt).toLocaleString('ko-KR',{timeZone:'Asia/Seoul'})+' 측정':null;
  const coordinates=['gps','tesla','pleos'].includes(location.kind)?'위도 '+location.lat.toFixed(5)+' · 경도 '+location.lng.toFixed(5):null;
  publishLocationStatus([describeOrigin(location),measured,coordinates,location.addressStatus,location.addressLabel,weather].filter(Boolean).join(' · '));
- $('#jusoMapButton').hidden=location.quality==='APPROXIMATE'||!['gps','tesla','pleos'].includes(location.kind);
+ $('#naverMapButton').hidden=location.quality==='APPROXIMATE'||!['gps','tesla','pleos'].includes(location.kind);
 }
-$('#jusoMapButton').addEventListener('click',()=>{
+const naverMapView=createNaverMapView({container:$('#naverMap'),status:$('#naverMapStatus')});
+$('#naverMapButton').addEventListener('click',()=>{
  const location=state.location;
  if(state.drivingPreview||state.locating||!location||!['gps','tesla','pleos'].includes(location.kind))return;
- const form=$('#jusoMapForm');
- form.elements.latitude.value=location.lat;
- form.elements.longitude.value=location.lng;
- openDialog($('#jusoMapDialog'));
- form.requestSubmit();
- form.reset();
+ openDialog($('#naverMapDialog'));
+ void naverMapView.show(location);
 });
-$('#jusoMapDialog').addEventListener('close',()=>{
- if(!$('#jusoMapDialog').open)$('#jusoMapFrame').src='about:blank';
+$('#naverMapDialog').addEventListener('close',()=>{
+ if(!$('#naverMapDialog').open)naverMapView.close();
 });
+window.addEventListener('pagehide',()=>naverMapView.close());
 async function lookupLocationAddress(location){
  const revision=locationRevision;
  const controller=new AbortController();
@@ -500,7 +499,7 @@ $('#teslaLocation').addEventListener('click',async()=>{
  recommendations=[];
  setLocating(true);
  render();
- $('#jusoMapButton').hidden=true;
+ $('#naverMapButton').hidden=true;
  $('#locationLabel').textContent='차량 위치 확인 중';
  publishLocationStatus('연결한 차량의 위치를 확인하고 있어요…');
  $('#resultStatus').textContent='차량 위치 확인 후 코스를 추천합니다.';

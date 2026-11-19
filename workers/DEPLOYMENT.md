@@ -27,6 +27,8 @@ DB는 기존 `flowad-workers-stage2`를 그대로 사용한다. 이름의 stage2
 
 런타임 Secret은 Cloudflare Worker에만 보관한다. `TOKEN_ENCRYPTION_KEY`, `NAVIGATION_TICKET_SECRET`, `TESLA_CLIENT_ID`, `TESLA_CLIENT_SECRET`, `JUSO_MAP_API_KEY`를 Git에 넣거나 빌드 로그에 출력하지 않는다. Worker 이름 변경은 기존 리소스의 ID·버전·바인딩을 유지하는 Cloudflare API로 수행한다.
 
+지도 표시는 Naver Maps JavaScript API v3를 사용한다. `flowad-api`에 `NAVER_MAP_KEY_ID`를 등록하고 Naver Cloud 애플리케이션에서 Dynamic Map 및 Web 서비스 URL `https://ravirgo.com`을 설정한다. `ncpKeyId`에 쓰는 공개 Key ID이며 Secret Key는 사용하거나 클라이언트로 보내지 않는다. `wrangler.jsonc`의 `keep_vars: true`는 대시보드에 등록한 공개 ID가 다음 자동 배포에서 사라지지 않도록 유지한다. 키 값을 Wrangler vars에 빈 값으로 덮어쓰지 않는다. `GET /api/location/map-config`는 공개 ID만 반환하고, 누락 시 `NAVER_MAP_NOT_CONFIGURED`를 반환한다. SDK와 타일은 사용자가 지도 열기를 누른 경우에만 요청한다. 선택한 위치 주변 타일 영역이 Naver에 전달되며 지도에서 이동해도 출발지·추천은 바뀌지 않는다. 주소 문자열 조회는 기존 JUSO API를 유지한다. Naver 등록·도메인 승인·이용 한도 및 실제 타일 렌더링은 유효 키로 별도 검증해야 한다.
+
 ## 다른 서비스
 
 Render `flowad-roads`는 선택한 코스의 도로 검증용 별도 서비스다. 이 Worker 자동 배포는 Render 설정과 도로 서버 배포 브랜치를 변경하지 않는다. Tesla 공개키를 제공하는 별도 Pages 사이트와 기존 도메인·콜백 주소도 유지한다.

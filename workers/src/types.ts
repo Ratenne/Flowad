@@ -11,7 +11,7 @@ export interface Env {
   TESLA_COMMAND_PROXY_URL?: string;
   TESLA_MULTI_STOP_MODE?: string; // absent/off, dry-run, enabled (explicit consent still required)
   TESLA_MULTI_STOP_SEND_ENABLED?: string;
-  GOOGLE_PLACES_API_KEY?: string;
+  GOOGLE_PLACES_KEY?: string;
   GOOGLE_PLACE_MAPPING_ENABLED?: string;
   GOOGLE_PLACES_SEARCH_DAILY_LIMIT?: string;
   GOOGLE_PLACES_DETAILS_DAILY_LIMIT?: string;

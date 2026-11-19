@@ -4,7 +4,7 @@ import {mapGooglePlace,cleanupGooglePlaces} from '../src/google-places';
 import {point} from '../src/routing';
 import {now} from '../src/utils';
 const poi={...point(1,'SCENIC_WAYPOINT','합성 전망대',35,129),poiId:'osm:node:1',region:'부산'};
-const env=()=>config({GOOGLE_PLACE_MAPPING_ENABLED:'true',GOOGLE_PLACES_API_KEY:'mock-only'});
+const env=()=>config({GOOGLE_PLACE_MAPPING_ENABLED:'true',GOOGLE_PLACES_KEY:'mock-only'});
 it('deduplicates searches, enforces field masks, caches verified IDs and expires location data',async()=>{
  const e=env(),masks:string[]=[];
  const http=external((url,init)=>{
@@ -25,7 +25,7 @@ it('blocks private points, missing keys, ambiguous results and exhausted daily b
  const e={...env(),GOOGLE_PLACES_SEARCH_DAILY_LIMIT:'1'};
  const http=external(url=>url.endsWith(':searchText')?json({places:[{id:'SyntheticPlaceA'},{id:'SyntheticPlaceB'}]}):json({location:{latitude:35,longitude:129}}));
  expect((await mapGooglePlace({...poi,type:'RETURN'},e)).reason).toBe('PUBLIC_POI_REQUIRED');
- expect((await mapGooglePlace(poi,{...e,GOOGLE_PLACES_API_KEY:undefined})).reason).toBe('GOOGLE_PLACES_NOT_CONFIGURED');
+ expect((await mapGooglePlace(poi,{...e,GOOGLE_PLACES_KEY:undefined})).reason).toBe('GOOGLE_PLACES_NOT_CONFIGURED');
  expect(http).not.toHaveBeenCalled();
  expect((await mapGooglePlace(poi,e)).reason).toBe('GOOGLE_PLACE_MATCH_UNCERTAIN');
  expect((await mapGooglePlace(poi,e)).cached).toBe(true);

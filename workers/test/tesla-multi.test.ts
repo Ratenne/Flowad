@@ -127,7 +127,7 @@ it.each([[400,'REQUEST_FAILED'],[401,'REAUTH_REQUIRED'],[403,'PERMISSION_DENIED'
  await expect(new TeslaClient(a.env,l).command('/api/1/vehicles/TEST-VIN/command/navigation_request',{type:'share_ext_content_raw',value:{'android.intent.extra.TEXT':'public test destination'},locale:'ko-KR',timestamp_ms:'1'})).rejects.toMatchObject({code});expect(provider).toHaveBeenCalledOnce();await l.save(true);
 });
 it('maps signed public points then transmits one ordered batch through mocked Fleet REST only after consent',async()=>{
- const env=config({...options,TESLA_MULTI_STOP_MODE:'enabled',TESLA_MULTI_STOP_SEND_ENABLED:'true',GOOGLE_PLACE_MAPPING_ENABLED:'true',GOOGLE_PLACES_API_KEY:'mock-only'});
+ const env=config({...options,TESLA_MULTI_STOP_MODE:'enabled',TESLA_MULTI_STOP_SEND_ENABLED:'true',GOOGLE_PLACE_MAPPING_ENABLED:'true',GOOGLE_PLACES_KEY:'mock-only'});
  const a=await authenticated({},env);
  const points=itinerary(false).map(p=>({...p,poiId:'osm:node:'+p.order,region:'부산'}));
  const legs=points.slice(1).map((_,i)=>({fromOrder:i,toOrder:i+1,distanceKm:1,durationSeconds:60,geometry:null}));

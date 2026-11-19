@@ -48,7 +48,7 @@ export async function mapGooglePlace(point:Point,env:Env,signal?:AbortSignal):Pr
  const fingerprint=await hash(JSON.stringify([point.poiId,point.name,point.region,point.latitude,point.longitude,point.poiLocation]));
  const row=await read(env,point.poiId),hit=cached(point,fingerprint,row);if(hit)return hit;
  if(row?.point_hash===fingerprint&&row.reference_json&&row.reference_expires>now())await env.DB.prepare('UPDATE google_place_mappings SET reference_json=NULL,reference_expires=0 WHERE poi_id=? AND point_hash=?').bind(point.poiId,fingerprint).run();
- if(!env.GOOGLE_PLACES_API_KEY)return fail('GOOGLE_PLACES_NOT_CONFIGURED');
+ if(!env.GOOGLE_PLACES_KEY)return fail('GOOGLE_PLACES_NOT_CONFIGURED');
  const key=await hash(env.NAVIGATION_TICKET_SECRET+fingerprint);
  if(inFlight.has(key)){const result=await inFlight.get(key)!;return {...result,order:point.order,name:point.name};}
  const pending=mapUncached(point,env,fingerprint,signal);inFlight.set(key,pending);
@@ -76,7 +76,7 @@ async function mapUncached(point:Point,env:Env,fingerprint:string,signal?:AbortS
   if(savedId&&placeId.safeParse(savedId).success)ids=[savedId];
   else{
    const raw=await request(env,'https://places.googleapis.com/v1/places:searchText',{
-    method:'POST',headers:{'Content-Type':'application/json','X-Goog-Api-Key':env.GOOGLE_PLACES_API_KEY!,'X-Goog-FieldMask':'places.id'},
+    method:'POST',headers:{'Content-Type':'application/json','X-Goog-Api-Key':env.GOOGLE_PLACES_KEY!,'X-Goog-FieldMask':'places.id'},
     body:JSON.stringify({textQuery:point.name+' '+point.region,regionCode:'KR',languageCode:'ko',pageSize:googlePlacesPolicy.candidates,
      locationBias:{circle:{center:point.poiLocation??{latitude:point.latitude,longitude:point.longitude},radius:200}}})
    },'SEARCH_IDS',signal);
@@ -89,7 +89,7 @@ async function mapUncached(point:Point,env:Env,fingerprint:string,signal?:AbortS
   for(const candidate of ids){
    signal?.throwIfAborted();
    const raw=await request(env,'https://places.googleapis.com/v1/places/'+encodeURIComponent(candidate),{
-    headers:{'X-Goog-Api-Key':env.GOOGLE_PLACES_API_KEY!,'X-Goog-FieldMask':'location'}
+    headers:{'X-Goog-Api-Key':env.GOOGLE_PLACES_KEY!,'X-Goog-FieldMask':'location'}
    },'DETAILS_LOCATION',signal);
    const parsed=z.object({location:coordinate}).safeParse(raw);if(!parsed.success)throw new Failure('GOOGLE_PLACES_INVALID_RESPONSE',503);
    candidates.push({id:candidate,location:parsed.data.location,meters:distance(point.latitude,point.longitude,parsed.data.location.latitude,parsed.data.location.longitude)*1000});

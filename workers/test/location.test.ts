@@ -46,7 +46,8 @@ it('bounds upstream responses, rejects redirects and handles unavailable and tim
 });
 it('exposes only the public Naver browser Key ID without an external call or a JUSO key',async()=>{
  const provider=external(()=>{throw Error('Unexpected external call');}),e=config({NAVER_MAP_KEY_ID:'public-naver-id',JUSO_MAP_API_KEY:'private-juso-key'});
- const r=await call('/api/location/map-config',undefined,{env:e});expect(r.status).toBe(200);expect(await r.json()).toEqual({provider:'NAVER',keyId:'public-naver-id'});expect(r.headers.get('Cache-Control')).toContain('no-store');expect(provider).not.toHaveBeenCalled();
+ const r=await call('/api/location/map-config',undefined,{env:e});expect(r.status).toBe(200);expect(await r.json()).toEqual({provider:'NAVER',keyId:'public-naver-id',keyParameter:'ncpKeyId'});expect(r.headers.get('Cache-Control')).toContain('no-store');expect(provider).not.toHaveBeenCalled();
+ const legacy=await call('/api/location/map-config',undefined,{env:{...e,NAVER_MAP_KEY_PARAMETER:'ncpClientId'}});expect(await legacy.json()).toMatchObject({keyParameter:'ncpClientId'});
  expect((await call('/api/location/juso-map',{}, {env:e})).status).toBe(404);
 });
 it('reports missing or invalid Naver configuration without falling back to the JUSO map SDK',async()=>{

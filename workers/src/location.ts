@@ -19,5 +19,7 @@ locations.get('/map-config',c=>{
   // This is the public browser Key ID, never a Naver secret or a JUSO key.
   const keyId=c.env.NAVER_MAP_KEY_ID?.trim();
   if(!keyId||! /^[A-Za-z0-9_-]{4,200}$/.test(keyId))return c.json({error:'NAVER_MAP_NOT_CONFIGURED'},503);
-  return c.json({provider:'NAVER',keyId});
+  const keyParameter=c.env.NAVER_MAP_KEY_PARAMETER??'ncpKeyId';
+  if(!['ncpKeyId','ncpClientId'].includes(keyParameter))return c.json({error:'NAVER_MAP_NOT_CONFIGURED'},503);
+  return c.json({provider:'NAVER',keyId,keyParameter});
 });

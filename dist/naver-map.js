@@ -4,7 +4,7 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
  const authResourceError=event=>{
   try{const url=new URL(event.target?.src);if(url.hostname==='oapi.map.naver.com'&&url.pathname==='/v3/auth')authHandler?.();}catch{/* Ignore unrelated application/resource errors. */}
  };
- function load(keyId){
+ function load(keyId,keyParameter){
   if(sdkPromise)return sdkPromise;
   sdkPromise=new Promise((resolve,reject)=>{
    const script=doc.createElement('script'),callback='flowadNaverMapReady'+(++loadRevision),previous=win.navermap_authFailure;let settled=false,readyTimer=null;
@@ -17,7 +17,7 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
    win[callback]=ready;
    win.navermap_authFailure=()=>finish('NAVER_MAP_AUTH_FAILED');
    script.onerror=()=>finish('NAVER_MAP_UNAVAILABLE');
-   script.src='https://oapi.map.naver.com/openapi/v3/maps.js?'+new URLSearchParams({ncpKeyId:keyId,callback});
+   script.src='https://oapi.map.naver.com/openapi/v3/maps.js?'+new URLSearchParams({[keyParameter]:keyId,callback});
    script.async=true;script.referrerPolicy='strict-origin';doc.head.append(script);
   }).catch(error=>{sdkPromise=null;throw error;});
   return sdkPromise;
@@ -38,7 +38,9 @@ export function createNaverMapView({container,status,fetcher=globalThis.fetch,wi
     if(current!==revision)return;
     if(!response.ok)throw Error(config.error||'NAVER_MAP_UNAVAILABLE');
     if(config.provider!=='NAVER'||typeof config.keyId!=='string'||!/^[A-Za-z0-9_-]{4,200}$/.test(config.keyId))throw Error('NAVER_MAP_UNAVAILABLE');
-    const maps=await load(config.keyId);if(current!==revision)return;
+    const keyParameter=config.keyParameter??'ncpKeyId';
+    if(!['ncpKeyId','ncpClientId'].includes(keyParameter))throw Error('NAVER_MAP_UNAVAILABLE');
+    const maps=await load(config.keyId,keyParameter);if(current!==revision)return;
     // Authentication may complete after the SDK bootstrap and map creation.
     previousAuth=win.navermap_authFailure;
     authHandler=()=>{if(current!==revision)return;clear();sdkPromise=null;status.textContent='네이버 지도 인증에 실패했습니다. 잠시 후 다시 시도해 주세요.';};

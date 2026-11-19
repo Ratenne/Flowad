@@ -1,12 +1,15 @@
 import { spawn } from 'node:child_process';
-import { writeFile } from 'node:fs/promises';
+import { mkdir,writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
 import {cf,accountId} from './cloudflare-client.mjs';
-const roadConfigured=(await cf(`/accounts/${accountId}/workers/scripts/flowad-api-stage2/settings`)).result.bindings.some(b=>b.name==='ROAD_ROUTING_URL'&&b.text);
-const origin='https://flowad-api-stage2.o94777.workers.dev',records=[],results=[];
+import {workerName,workerConfig,origin,productionArguments} from './production-target.mjs';
+productionArguments();
+await mkdir('.wrangler/production',{recursive:true});
+const roadConfigured=(await cf(`/accounts/${accountId}/workers/scripts/${workerName}/settings`)).result.bindings.some(b=>b.name==='ROAD_ROUTING_URL'&&b.text);
+const records=[],results=[];
 let firstKeys;
 function tail(name,unlabelled=false){
-const child=spawn(process.execPath,['node_modules/wrangler/bin/wrangler.js','tail',name,'--config','wrangler.stage2.jsonc','--format','json'],{stdio:['ignore','pipe','pipe'],windowsHide:true});
+const child=spawn(process.execPath,['node_modules/wrangler/bin/wrangler.js','tail',name,'--config',workerConfig,'--format','json'],{stdio:['ignore','pipe','pipe'],windowsHide:true});
 let buffer='',depth=0,start=-1,string=false,escape=false;
 child.stdout.on('data',chunk=>{
   const raw=chunk.toString();
@@ -25,7 +28,7 @@ child.stdout.on('data',chunk=>{
 child.stderr.on('data',()=>{});
 return child;
 }
-const children=[tail('flowad-api-stage2')];
+const children=[tail(workerName)];
 const pause=ms=>new Promise(r=>setTimeout(r,ms));
 const base={latitude:37.5665,longitude:126.978,availableMinutes:180,scenery:'forest',vehicleType:'ev'};
 async function request(label,path,body,extra={}){
@@ -55,5 +58,5 @@ try{
 }finally{
   children.forEach(child=>child.kill());
   const cpu=records.map(r=>r.cpuTimeMs).filter(n=>typeof n==='number'),out={observedAt:new Date().toISOString(),origin,results,traceKeys:firstKeys,metrics:records,cpuSummary:cpu.length?{samples:cpu.length,maxMs:Math.max(...cpu),medianMs:cpu.sort((a,b)=>a-b)[Math.floor(cpu.length/2)]}:null,memoryStatus:'No per-request heap measurement; inspect invocation outcomes for limit errors.'};
-  await writeFile('.wrangler/stage2/http-metrics.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out,null,2));
+  await writeFile('.wrangler/production/http-metrics.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out,null,2));
 }

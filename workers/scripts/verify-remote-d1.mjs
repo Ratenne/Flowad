@@ -1,15 +1,17 @@
 import assert from 'node:assert/strict';
 import { createHash,createDecipheriv,randomUUID } from 'node:crypto';
-import { readFile,writeFile } from 'node:fs/promises';
+import { mkdir,readFile,writeFile } from 'node:fs/promises';
 import { cf,accountId } from './cloudflare-client.mjs';
-const db='3a0191de-08ae-4850-8157-ccb5bf022152';
+import {origin,prefix,databaseId} from './production-target.mjs';
+if(!process.argv.includes('--allow-production-d1-write'))throw Error('This mutates production sessions/OAuth state. Use local npm test, or explicitly pass --allow-production-d1-write with FLOWAD_TEST_SECRETS_FILE.');
+if(!process.env.FLOWAD_TEST_SECRETS_FILE)throw Error('FLOWAD_TEST_SECRETS_FILE must explicitly identify the current test credentials; historical initial keys are not selected automatically.');
+const secrets=JSON.parse(await readFile(process.env.FLOWAD_TEST_SECRETS_FILE,'utf8'));
+const db=databaseId;
 const stats=[];
 async function query(sql,params=[]){const r=await cf(`/accounts/${accountId}/d1/database/${db}/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sql,params})});const data=r.result[0];assert.equal(data.success,true);stats.push(data.meta);return data.results;}
-const origin='https://flowad-api-stage2.o94777.workers.dev';
-const r=await fetch(origin+'/flowad/api/tesla/status');assert.equal(r.status,200);const status=await r.json(),cookie=r.headers.get('set-cookie').split(';')[0],id=cookie.split('=')[1];
+const r=await fetch(origin+prefix+'/api/tesla/status');assert.equal(r.status,200);const status=await r.json(),cookie=r.headers.get('set-cookie').split(';')[0],id=cookie.split('=')[1];
 const key=createHash('sha256').update(id).digest('base64url');
 const rows=await query('SELECT id,ciphertext,expires_at FROM sessions WHERE id=?',[key]);assert.equal(rows.length,1);assert(!JSON.stringify(rows).includes(status.csrf));assert(!JSON.stringify(rows).includes(id));
-const secrets=JSON.parse(await readFile('.wrangler/stage2/initial-secrets.json','utf8'));
 const [iv,encoded]=rows[0].ciphertext.split('.'),encrypted=Buffer.from(encoded,'base64'),cipher=createDecipheriv('aes-256-gcm',Buffer.from(secrets.TOKEN_ENCRYPTION_KEY,'base64'),Buffer.from(iv,'base64'));
 cipher.setAAD(Buffer.from(key));cipher.setAuthTag(encrypted.subarray(-16));const plain=Buffer.concat([cipher.update(encrypted.subarray(0,-16)),cipher.final()]);assert.equal(JSON.parse(plain).csrf,status.csrf);
 const n=(await query('SELECT unixepoch() AS epoch'))[0].epoch,state='stage2-'+randomUUID(),owner=randomUUID();
@@ -24,4 +26,5 @@ await query('DELETE FROM oauth_states WHERE expires_at<=? AND session_id=?',[n,k
 await query('DELETE FROM sessions WHERE id=?',[key]);
 const schema=await query("SELECT name,type FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY name");
 const out={observedAt:new Date().toISOString(),database:db,status:'REAL_API_VERIFIED',checks:{remoteReadWrite:true,encryptedSessionRoundTrip:true,noPlaintextCsrfOrCookie:true,atomicStateSingleConsumption:true,leaseExclusion:true,stateExpiry:true,expiredOwnRecordCleanup:true},schema,queryCount:stats.length,rowsRead:stats.reduce((n,m)=>n+(m.rows_read??0),0),rowsWritten:stats.reduce((n,m)=>n+(m.rows_written??0),0)};
-await writeFile('.wrangler/stage2/d1-verification.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out,null,2));
+await mkdir('.wrangler/production',{recursive:true});
+await writeFile('.wrangler/production/d1-verification.json',JSON.stringify(out,null,2));console.log(JSON.stringify(out,null,2));

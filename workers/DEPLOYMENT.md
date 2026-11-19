@@ -17,7 +17,11 @@ GitHub의 **Cloudflare Workers and Pages** 앱에 `Ratenne/Flowad` 저장소 접
 
 ## 설정의 기준
 
-운영 Wrangler 설정은 `workers/wrangler.jsonc` 하나로 관리한다. `wrangler.production.jsonc`는 제거했다. 로컬 테스트는 별도 `wrangler.local.jsonc`를 사용한다. `wrangler.stage2.jsonc`는 과거 성능 실험용이며 운영 배포에 사용하지 않는다.
+운영 Wrangler 설정은 `workers/wrangler.jsonc` 하나로 관리한다. `wrangler.production.jsonc`와 과거 실험용 `wrangler.stage2.jsonc`는 제거했다. 로컬 테스트는 별도 `wrangler.local.jsonc`를 사용한다.
+
+로그·통계·성능/원격 검증 도구는 `scripts/production-target.mjs`를 통해 이 설정의 Worker 이름·운영 URL·D1 ID를 읽는다. 이름에 stage2가 남은 일부 스크립트 파일도 실행 대상은 `flowad-api`다. 운영으로 요청을 보내는 측정 도구는 `--allow-production-requests` 없이는 실행하지 않는다. `verify-remote-d1.mjs`는 별도의 `--allow-production-d1-write`와 명시적인 현재 테스트 자격 파일이 필요하며, 일반 검증에는 로컬 `npm test`를 사용한다. 이 변경 확인 과정에서 운영 부하 테스트·D1 쓰기·키 생성은 수행하지 않는다.
+
+원인: 2026-11-16 Worker 이름 통합 후 기본 배포 설정과 Route는 갱신했지만, 그 전에 작성한 진단·성능 측정 스크립트의 하드코딩된 대상과 옛 배포 설정을 정리하지 않았다. 프런트엔드는 같은 출처의 `./api/...`를 사용하므로 이들 도구의 잘못된 참조와 실제 사용자 요청의 Route를 구분해야 한다. 과거 결과 문서는 당시 이름을 보존하며 현재 명령의 기준으로 사용하지 않는다. 재발 검사는 `node ../scripts/test-worker-target.mjs`로 수행한다.
 
 DB는 기존 `flowad-workers-stage2`를 그대로 사용한다. 이름의 stage2는 데이터베이스 생성 당시 이름이며, Worker 통합을 위해 DB를 새로 만들거나 데이터를 이동하지 않는다. `ADDRESS_DB`는 사용하지 않는다.
 

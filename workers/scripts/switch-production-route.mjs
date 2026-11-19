@@ -7,7 +7,7 @@ if(!['--approved-cutover','--rollback'].includes(mode))throw new Error('Choose -
 const matches=(await cf(`/zones/${zone}/workers/routes`)).result.filter(route=>route.pattern===pattern);
 if(matches.length!==1)throw new Error('Expected exactly one Flowad production route.');
 const before=matches[0],id=before.id;
-if(before.pattern!==pattern||!['flowad-path-proxy','flowad-api-stage2','flowad-api'].includes(before.script))throw new Error('Unexpected live route; refusing to overwrite another configuration.');
+if(before.pattern!==pattern||!['flowad-path-proxy','flowad-api'].includes(before.script))throw new Error('Unexpected live route; refusing to overwrite another configuration.');
 if(mode==='--approved-cutover'){
   const ready=(await cf('/accounts/8840227b6eb94fdbb655f3a662bf55d8/workers/scripts/flowad-api/settings')).result;
   const vars=Object.fromEntries(ready.bindings.filter(b=>b.type==='plain_text').map(b=>[b.name,b.text]));

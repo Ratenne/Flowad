@@ -25,16 +25,7 @@ OSRM은 원래 순서로 호출한다. `steps=false,overview=false,generate_hint
 
 `OSRM_BATCH_TOKEN`을 테스트 Worker Secrets에 별도 등록한다. `OSRM_BATCH_URL`이 있고 FREE_PLAN_MODE=true일 때 추천만 batch를 사용한다. 기존 full geometry 및 Tesla 개별 목적지 검증은 원래 client를 사용한다. 코드에서 선택 후보를3개로 줄이지 않는다.
 
-```powershell
-cd workers
-# 테스트 Worker만 batch 모드
-npx wrangler deploy --config wrangler.stage2.jsonc --var OSRM_BATCH_URL:https://flowad-batch-experiment.onrender.com
-node scripts/measure-recommendation-cpu.mjs batch-fixed 24
-# 원래 직접 호출 모드로 복구 (운영 Route 변경 없음)
-npx wrangler deploy --config wrangler.stage2.jsonc
-```
-
-`wrangler.production.jsonc`에는 Adapter 주소를 넣지 않는다. 장애 시10회 직접 호출로 자동 재시도하는 fallback도 없다. 기존 Render 서비스·기존 secrets는 덮어쓰지 않는다.
+이 절차는 통합 이전 실험 기록이다. 과거 테스트 Worker 설정은 제거했으며 현재 `wrangler.jsonc`는 운영 `flowad-api`에 배포하므로 여기에 실험용 `OSRM_BATCH_URL`을 덮어쓰지 않는다. 추가 실험은 운영 Route·D1·자격과 분리한 새 설정을 먼저 준비한다. 현재 배포 기준은 [운영 문서](../../workers/DEPLOYMENT.md)를 따른다. 기존 Render 서비스·기존 secrets는 덮어쓰지 않는다.
 
 ## 계측 한계
 

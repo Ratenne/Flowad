@@ -1,5 +1,7 @@
 # 2단계 최종 추천·도로 검증 정책
 
+> 2026-11-13 당시의 검증 기록이다. 현재 Worker는 `flowad-api`로 통합됐으며 아래의 옛 이름·설정·배포 명령은 실행하지 않는다. 현재 절차는 [DEPLOYMENT.md](DEPLOYMENT.md)를 따른다.
+
 상태: DEPLOYED / REAL_API_VERIFIED(추천·선택 OSRM·D1·웹). 2026-11-13 사용자 명시 승인 후 운영 Route 전환 및 실제 HTTP/브라우저 검증 완료. CPU 안정성 및 새 운영 Tesla OAuth는 아래와 같이 별도 미검증 상태를 유지한다. 초기 기능 검증 버전 `5dd1e38e-6ecc-472b-810b-00067ed1d014`, 소스 commit `f8f0ee5`(codex/stage2-final).
 
 최종 승인 검토용 릴리스: 소스 `2ed6874`, 테스트 Worker 버전 `47a59815-239b-4095-ab62-955b580a97da` (2026-11-13). 고정된 detached checkout에서 배포했다. 후속 HTTP 재검사에서 기본 추천200/3개/모두 추정 상태, 익명 D1 session200, 같은 session의 Tesla preview400/NOT_CONNECTED를 확인했다. 차량 명령은0건이다. 타입 검사·Lint·Wrangler dry-run build가 통과했다. 승인 당시 운영 Route는 `flowad-path-proxy`였으며 아래 승인 후 전환했다. 이번 최종 정책의 실제 Cloudflare CPU 안정성은 새로 측정하지 않았으므로 NOT_VERIFIED다. 이전 Batch CPU 결과를 새 정책의 실측 결과로 사용하지 않는다.

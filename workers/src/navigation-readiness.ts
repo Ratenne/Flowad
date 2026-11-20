@@ -1,5 +1,5 @@
 import type {Env} from './types';
-import {checkRoadCooldown,osrmRequest} from './road-provider';
+import {checkRoadCooldown,osrmRequest,publicNearestPath} from './road-provider';
 import {Failure,httpsBase} from './utils';
 const pending=new Map<string,Promise<{ready:boolean;retryAfterSeconds?:number}>>();
 const recent=new Map<string,{until:number;warming?:boolean}>();
@@ -8,7 +8,7 @@ export function providerReady(key:string){
  recent.set(key,{until:Date.now()+60000});
 }
 // A public reference point checks the OSRM service, never the user's location.
-// No scheduled warming and no retry held inside a Worker invocation.
+// The explicit readiness path does not hold a retry inside an invocation.
 export async function navigationReadiness(env:Env){
  if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_PROVIDER_NOT_CONFIGURED',503);
  const key=env.ROAD_ROUTING_URL;
@@ -20,7 +20,7 @@ export async function navigationReadiness(env:Env){
  const operation=(async()=>{
   const warming=()=>{const current=recent.get(key);if(!current||current.until<=Date.now())recent.set(key,{until:Date.now()+20000,warming:true});return {ready:false,retryAfterSeconds:20};};
   let response;
-  try{response=await osrmRequest(env,base+'/nearest/v1/driving/126.978,37.5665?number=1',{},8000);}
+  try{response=await osrmRequest(env,base+publicNearestPath,{},8000);}
   catch(e){if(e instanceof Failure&&['UPSTREAM_TIMEOUT','SERVICE_UNAVAILABLE'].includes(e.code))return warming();throw e;}
   if(response.status!==200&&env.SAFE_UPSTREAM_DIAGNOSTICS==='true'){
    console.warn(JSON.stringify({event:'osrm_readiness',status:response.status,retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged,...response.diagnostics}));

@@ -6,6 +6,7 @@ import { tesla } from './tesla';
 import { charging } from './charging';
 import { locations } from './location';
 import {cleanupGooglePlaces} from './google-places';
+import {keepaliveCron,runRoadKeepalive} from './road-keepalive';
 const methods:Record<string,'GET'|'POST'>={
   '/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST','/api/navigation/readiness':'POST','/api/charging/recommendations':'POST',
   '/api/location/address':'POST','/api/location/map-config':'GET',
@@ -43,5 +44,8 @@ export default {
     if(prefix&&u.pathname.startsWith(prefix+'/api/')){u.pathname=u.pathname.slice(prefix.length);request=new Request(u,request);}
     return app.fetch(request,env,ctx);
   },
-  async scheduled(_event:ScheduledController,env:Env){await cleanup(env);await cleanupGooglePlaces(env);}
+  async scheduled(event:ScheduledController,env:Env){
+    if(event.cron==='*/30 * * * *'){await cleanup(env);await cleanupGooglePlaces(env);}
+    if(event.cron===keepaliveCron)await runRoadKeepalive(env,event.scheduledTime);
+  }
 } satisfies ExportedHandler<Env>;

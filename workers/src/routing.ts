@@ -34,6 +34,8 @@ async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords
   if(response.status!==200){
     const diagnostics=env.SAFE_UPSTREAM_DIAGNOSTICS==='true'?{retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged,...response.diagnostics}:undefined;
     console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length,...diagnostics}));
+  }else if(env.SAFE_UPSTREAM_DIAGNOSTICS==='true'){
+    console.log(JSON.stringify({event:'osrm_route_success',httpStatus:200,elapsedMs:Math.round(performance.now()-started)}));
   }
   return response;
 }

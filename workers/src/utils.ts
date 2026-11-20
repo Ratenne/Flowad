@@ -64,9 +64,9 @@ export function httpsBase(raw: string): string {
   return u.href.replace(/\/+$/, '');
 }
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
-type UpstreamDiagnostics = {viaRender:boolean;renderRouting?:string;renderRequestId?:string;rayId?:string};
+type UpstreamDiagnostics = {viaRender:boolean;renderRouting?:string;renderRequestId?:string;rayId?:string;cacheStatus?:string};
 type UpstreamResponse = {status:number;data:unknown;retryAfterSeconds?:number;challenged?:boolean;diagnostics?:UpstreamDiagnostics};
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000, {stopAtRateLimit=false}={}): Promise<UpstreamResponse> {
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000, {stopAtRateLimit=false,captureDiagnostics=false}={}): Promise<UpstreamResponse> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
@@ -74,7 +74,7 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
     const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):retryAfter?Math.ceil((Date.parse(retryAfter)-Date.now())/1000):NaN;
     const result:UpstreamResponse={status:response.status,data:null};
     if(Number.isSafeInteger(seconds)&&seconds>0)result.retryAfterSeconds=seconds;
-    if(response.status>=400){
+    if(response.status>=400||captureDiagnostics){
       const safeHeader=(name:string,format:RegExp)=>{
         const value=response.headers.get(name);
         return value&&format.test(value)?value:undefined;
@@ -83,7 +83,8 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
         viaRender:response.headers.get('x-render-origin-server')==='Render',
         renderRouting:safeHeader('x-render-routing',/^[a-z-]{1,40}$/),
         renderRequestId:safeHeader('rndr-id',/^[a-f0-9-]{8,40}$/i),
-        rayId:safeHeader('cf-ray',/^[a-f0-9]{16}(?:-[A-Z]{3})?$/)
+        rayId:safeHeader('cf-ray',/^[a-f0-9]{16}(?:-[A-Z]{3})?$/),
+        cacheStatus:captureDiagnostics?safeHeader('cf-cache-status',/^[A-Z]{1,16}$/):undefined
       };
     }
     // A browser challenge is not an OSRM response or a request-rate allowance.

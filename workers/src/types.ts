@@ -16,6 +16,11 @@ export interface Env {
   GOOGLE_PLACES_SEARCH_DAILY_LIMIT?: string;
   GOOGLE_PLACES_DETAILS_DAILY_LIMIT?: string;
   ROAD_ROUTING_URL?: string;
+  ROAD_KEEPALIVE_ENABLED?: string;
+  ROAD_KEEPALIVE_INTERVAL_MINUTES?: string;
+  ROAD_KEEPALIVE_EXPERIMENT_DAYS?: string;
+  ROAD_KEEPALIVE_START_AT?: string;
+  ROAD_KEEPALIVE_REVIEW?: string;
   // Optional experiment only. No production config enables this adapter.
   OSRM_BATCH_URL?: string;
   OSRM_BATCH_TOKEN?: string;

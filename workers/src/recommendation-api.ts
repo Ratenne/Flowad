@@ -7,6 +7,7 @@ import {roadVerificationRequest,verifySelected} from './selected-route';
 import {Failure,hash,nonce,now} from './utils';
 import {dynamicPolicy} from './dynamic-recommendations';
 import {navigationReadiness} from './navigation-readiness';
+import {recordExperimentTraffic} from './road-keepalive';
 const inFlight=new Map<string,Promise<unknown>>();
 export const recommendationMethods={'/api/recommendations':'POST','/api/navigation/resolve':'POST','/api/navigation/verify':'POST','/api/navigation/readiness':'POST'} as const;
 export function mountRecommendationApi(app:Hono<Bindings>){
@@ -38,9 +39,30 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   try{const r=z.object({ticket:z.string()}).parse(await c.req.json());return c.json(await resolve(r.ticket,c.env.NAVIGATION_TICKET_SECRET));}catch{return c.body(null,400);}
  });
  app.post('/api/navigation/verify',async c=>{
-  const parsed=roadVerificationRequest.safeParse(await c.req.json().catch(()=>null));
+  const input:unknown=await c.req.json().catch(()=>null),parsed=roadVerificationRequest.safeParse(input);
   if(!parsed.success)return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:'INVALID_REQUEST'},400);
-  try{return c.json(await verifySelected(parsed.data,c.env));}
-  catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code,...error.context},error.status);}
+  const at=Date.now(),started=performance.now();
+  const manualRetry=!!(input&&typeof input==='object'&&'manualRetry'in input&&input.manualRetry===true);
+  const report=async(status:number,error?:Failure)=>{
+   const elapsedMs=Math.round(performance.now()-started);
+   if(c.env.SAFE_UPSTREAM_DIAGNOSTICS==='true'){
+    console.log(JSON.stringify({event:'road_verification',status,elapsedMs,manualRetry,error:error?.code,
+     timedOut:error?.code==='ROAD_PROVIDER_TIMEOUT',over25s:elapsedMs>25000,retryAfterSeconds:error?.retryAfterSeconds}));
+   }
+   if(status===200||status>=500||['NO_ROAD_ROUTE','WAYPOINT_TOO_FAR_FROM_ROAD'].includes(error?.code??'')){
+    await recordExperimentTraffic(c.env,at,status===200?'success':'failure');
+   }
+  };
+  await recordExperimentTraffic(c.env,at);
+  try{
+   const verified=await verifySelected(parsed.data,c.env);
+   await report(200);
+   return c.json(verified);
+  }catch(e){
+   const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);
+   await report(error.status,error);
+   if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));
+   return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code,...error.context},error.status);
+  }
  });
 }

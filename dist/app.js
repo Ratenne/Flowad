@@ -690,14 +690,19 @@ function showRoadFailure(r,output,error){
  };
  update();
 }
+const failedRoadAttempts=new WeakSet();
 async function verifyRoad(r,output){
  const origin=state.location,controller=new AbortController(),timer=setTimeout(()=>controller.abort(),35000);
  const roadOutput=$('#roadVerificationResult');
  if(output)output.textContent='선택한 코스의 실제 도로 연결을 확인하고 있어요…';
+ let requested=false;
  try{
   if(!origin||origin.kind==='demo'||state.locating)throw Error('REAL_ORIGIN_REQUIRED');
   if(Date.now()<roadRetryAt)throw Error('ROAD_PROVIDER_RATE_LIMIT');
-  const data=await requestRoadVerification({...roadVerificationCredential(r),...navigationConditions()},{signal:controller.signal});
+  requested=true;
+  const data=await requestRoadVerification({...roadVerificationCredential(r),...navigationConditions(),...(failedRoadAttempts.has(r)?{manualRetry:true}:{})},{signal:controller.signal});
+  requested=false;
+  failedRoadAttempts.delete(r);
   if(origin!==state.location||recommendations.find(x=>x.id===r.id)!==r)return null;
   Object.assign(r,applyVerifiedRoute(r,data));render();syncSelection();
   // The Worker still enforces the signed five-minute expiry.
@@ -715,6 +720,7 @@ async function verifyRoad(r,output){
   }
   return data;
  }catch(e){
+  if(requested)failedRoadAttempts.add(r);
   if(e.message==='ROAD_PROVIDER_RATE_LIMIT'&&e.retryAfterSeconds)roadRetryAt=Date.now()+e.retryAfterSeconds*1000;
   if(origin!==state.location||recommendations.find(x=>x.id===r.id)!==r)return null;
   if(output&&output!==roadOutput)output.textContent='';

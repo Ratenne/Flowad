@@ -1,6 +1,7 @@
 import type {Env} from './types';
 import {Failure,httpJson} from './utils';
 
+export const publicNearestPath='/nearest/v1/driving/126.978,37.5665?number=1';
 type Cooldown = {retry_until:number;probe_until:number};
 const findSql='SELECT retry_until,probe_until FROM road_provider_cooldown WHERE origin=?';
 
@@ -17,6 +18,12 @@ export async function checkRoadCooldown(env:Env,origin:string){
  const state=await cooldown(env,origin);
  check(state,Date.now());
  return state!==null;
+}
+
+export async function recordRoadCooldown(env:Env,origin:string,seconds:number){
+ const until=Math.min(Number.MAX_SAFE_INTEGER,Date.now()+seconds*1000);
+ await env.DB.prepare(`INSERT INTO road_provider_cooldown(origin,retry_until,probe_until) VALUES(?,?,0)
+   ON CONFLICT(origin) DO UPDATE SET retry_until=MAX(retry_until,excluded.retry_until),probe_until=0`).bind(origin,until).run();
 }
 
 export async function osrmRequest(env:Env,url:string,init:RequestInit|undefined,timeout=10000){
@@ -36,10 +43,7 @@ export async function osrmRequest(env:Env,url:string,init:RequestInit|undefined,
  }
  const response=await httpJson(url,init,timeout,{stopAtRateLimit:true});
  if(response.status===429&&!response.challenged){
-  const seconds=response.retryAfterSeconds??30;
-  const until=Math.min(Number.MAX_SAFE_INTEGER,Date.now()+seconds*1000);
-  await env.DB.prepare(`INSERT INTO road_provider_cooldown(origin,retry_until,probe_until) VALUES(?,?,0)
-    ON CONFLICT(origin) DO UPDATE SET retry_until=MAX(retry_until,excluded.retry_until),probe_until=0`).bind(origin,until).run();
+  await recordRoadCooldown(env,origin,response.retryAfterSeconds??30);
  }else if(probeUntil&&!response.challenged&&answeredByOsrm(response)){
   await env.DB.prepare('DELETE FROM road_provider_cooldown WHERE origin=? AND probe_until=?').bind(origin,probeUntil).run();
  }

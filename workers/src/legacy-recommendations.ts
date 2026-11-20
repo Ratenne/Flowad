@@ -4,7 +4,7 @@ import catalog from '../../backend/src/main/resources/courses.json';
 import type { Env, Route } from './types';
 import { coordinate, distance, Failure } from './utils';
 import { route } from './routing';
-import { issue } from './tickets';
+import { issueCourseCredentials } from './tickets';
 import { batchRoutes } from './batch-routing';
 const weather=z.object({condition:z.enum(['sunny','cloudy','rainy']),temperatureC:z.number(),windMps:z.number().min(0),severe:z.boolean().nullish(),source:z.string().min(1).max(100).refine(s=>s.trim().length>0),observedAt:z.iso.datetime({offset:true}).nullish()});
 export const recommendation=coordinate.extend({requestId:z.string().min(8).max(80).optional(),poiIds:z.array(z.string().min(1).max(150)).min(1).max(3).optional(),originSource:z.enum(['gps','tesla','pleos','manual','demo','unknown']).optional(),roundTrip:z.boolean().optional(),availableMinutes:z.number().int().min(1).max(1440),scenery:z.enum(['all','forest','coast','open']),vehicleType:z.enum(['ice','ev']),batteryPercent:z.number().min(0).max(100).nullish(),estimatedRangeKm:z.number().positive().max(2000).nullish(),weather:weather.nullish(),courseWeather:z.record(z.string(),weather.nullable()).refine(x=>Object.keys(x).length<=100).nullish(),originSevere:z.boolean().nullish(),walking:z.boolean().nullish(),departure:z.string().nullish(),returnLatitude:z.number().min(-90).max(90).nullish(),returnLongitude:z.number().min(-180).max(180).nullish()}).refine(r=>(r.returnLatitude==null)===(r.returnLongitude==null));
@@ -45,7 +45,7 @@ export async function recommendWithRouting(r: Input, env: Env) {
     if(bs==='ROAD_ROUTE_REQUIRED')reasons.push('실제 도로 경로가 없어 충전 필요성을 판단할 수 없어요.');
     else if(bs==='INSUFFICIENT_INPUT')reasons.push('배터리 판단에 필요한 입력이 부족해요.');
     else if(bs==='CHARGING_MAY_BE_NEEDED')reasons.push('입력값 기준 충전이 필요할 수 있어요.');
-    courses.push({id:x.course.id,name:x.course.name,reasons,estimatedRoundTripKm:x.km,estimatedMinutes:x.minutes,waypoints:x.route.points.map(p=>({name:p.name,description:p.verification})),distanceTimeStatus:x.route.status,batteryStatus:bs,dataSource:{course:'내장 예시 코스 10개',distanceTime:real?x.route.provider:'각 구간 직선거리 × 1.18 및 평균 55km/h 추정',weather:x.weather?.source??'없음: 예시 날씨',weatherObservedAt:x.weather?.observedAt??null,generatedAt:new Date().toISOString()},route:x.route,navigationTicket:await issue(x.course.id,x.route,env.NAVIGATION_TICKET_SECRET)});
+    courses.push({id:x.course.id,name:x.course.name,reasons,estimatedRoundTripKm:x.km,estimatedMinutes:x.minutes,waypoints:x.route.points.map(p=>({name:p.name,description:p.verification})),distanceTimeStatus:x.route.status,batteryStatus:bs,dataSource:{course:'내장 예시 코스 10개',distanceTime:real?x.route.provider:'각 구간 직선거리 × 1.18 및 평균 55km/h 추정',weather:x.weather?.source??'없음: 예시 날씨',weatherObservedAt:x.weather?.observedAt??null,generatedAt:new Date().toISOString()},route:x.route,...await issueCourseCredentials(x.course.id,x.route,env.NAVIGATION_TICKET_SECRET)});
   }
   return {courses,weatherExcluded,timeExcluded,routingFailed,guidance:!courses.length?(routingFailed?'경로 계산에 실패한 후보가 있습니다. 잠시 후 다시 시도하거나 조건을 조정하세요.':'조건에 맞는 코스가 없습니다. 이용 시간을 늘리거나 날씨 조건을 확인하세요.'):courses.every(c=>c.route.status==='ROAD_ROUTED')?'도로 경로 기준 추천입니다.':'차량 순정 내비의 경로 결과를 받기 전이라 전체 왕복은 추정입니다.'};
 }

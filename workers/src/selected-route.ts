@@ -2,13 +2,18 @@ import {z} from 'zod';
 import catalog from '../../backend/src/main/resources/courses.json';
 import type {Env} from './types';
 import {Failure,hash} from './utils';
-import {resolve,issue} from './tickets';
+import {resolve,resolveSelection,issue} from './tickets';
 import {verifyCourse,road,finish} from './routing';
 import {battery} from './recommendations';
 export const vehicleConditions=z.object({
  vehicleType:z.enum(['ice','ev']).default('ev'),batteryPercent:z.number().min(0).max(100).nullish(),estimatedRangeKm:z.number().positive().max(2000).nullish(),walking:z.boolean().optional(),availableMinutes:z.number().int().min(1).max(1440).optional()
 });
 export const selectedRequest=vehicleConditions.extend({ticket:z.string().min(1).max(65536)});
+export const roadVerificationRequest=z.union([
+ selectedRequest.extend({selectionToken:z.never().optional()}),
+ vehicleConditions.extend({ticket:z.never().optional(),selectionToken:z.string().min(1).max(65536)})
+]);
+type RoadVerificationInput=z.infer<typeof roadVerificationRequest>;
 // Reuse fresh signed road proof for preparation, without a second OSRM request
 // or extending the proof's expiry. Old tickets retain their verification path.
 export async function prepareSelected(input:z.infer<typeof selectedRequest>,env:Env){
@@ -22,15 +27,17 @@ export async function prepareSelected(input:z.infer<typeof selectedRequest>,env:
  return {verificationStatus:'ROAD_ROUTE_VERIFIED',roadVerified:true,route,batteryStatus:battery(input,route.distanceKm),withinAvailableMinutes:input.availableMinutes==null?null:route.totalSeconds<=input.availableMinutes*60,navigationTicket:input.ticket,expiresAt:saved.expiresAt,note:'유효한 도로 검증 티켓의 전체 방문 순서를 준비했습니다.'};
 }
 const pending=new Map<string,ReturnType<typeof verifySelectedOnce>>();
-export async function verifySelected(input:z.infer<typeof selectedRequest>,env:Env){
+export async function verifySelected(input:RoadVerificationInput,env:Env){
  const key=await hash(JSON.stringify([input,env.ROAD_ROUTING_URL,env.NAVIGATION_TICKET_SECRET]));
  if(pending.has(key))return pending.get(key)!;
  if(pending.size>=8)throw new Failure('ROAD_VERIFICATION_BUSY',503,3);
  const operation=verifySelectedOnce(input,env);pending.set(key,operation);
  try{return await operation;}finally{pending.delete(key);}
 }
-async function verifySelectedOnce(input:z.infer<typeof selectedRequest>,env:Env){
- const saved=await resolve(input.ticket,env.NAVIGATION_TICKET_SECRET),first=saved.route.points[0],last=saved.route.points.at(-1)!;
+async function verifySelectedOnce(input:RoadVerificationInput,env:Env){
+ const secret=env.NAVIGATION_TICKET_SECRET;
+ const saved=input.selectionToken===undefined?await resolve(input.ticket,secret):await resolveSelection(input.selectionToken,secret);
+ const first=saved.route.points[0],last=saved.route.points.at(-1)!;
  if(first.type!=='ORIGIN'||!['RETURN','DESTINATION'].includes(last.type))throw new Failure('INVALID_TICKET');
  if(saved.courseId.startsWith('dyn-')){
   if(!['ROAD_ROUTED','ESTIMATED_NOT_ROAD_ROUTED'].includes(saved.route.status)||saved.route.points.some(p=>p.verification==='NO_CAR_ACCESS')||!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');

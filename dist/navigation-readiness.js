@@ -9,6 +9,16 @@ export async function requestRoadVerification(body,{signal,fetcher=fetch}={}){
  throw error;
 }
 
+export function roadVerificationCredential(course){
+ if(course?.selectionToken)return {selectionToken:course.selectionToken};
+ if(course?.navigationTicket)return {ticket:course.navigationTicket};
+ return null;
+}
+
+export function hasFreshRoadProof(course,now=Date.now()){
+ return !!(course.navigationTicket&&course.vehicleTransferAllowed&&course.roadTicketUntil>now);
+}
+
 export function roadRetryMessage(retryAt,now=Date.now()){
  const seconds=Math.ceil((retryAt-now)/1000);
  return seconds>0?' '+seconds+'초 후 다시 시도할 수 있어요.':'';

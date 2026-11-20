@@ -1,5 +1,6 @@
 import {it,expect,vi} from 'vitest';
 import {call,config,external,json} from './helpers';
+import {osrmRequest} from '../src/road-provider';
 it.each([502,503,504])('reports startup HTTP %s as pending readiness, never verified',async status=>{
  const provider=external(()=>json(null,status));
  const r=await call('/api/navigation/readiness',{}, {env:config({ROAD_ROUTING_URL:'https://roads.test'})});
@@ -44,4 +45,28 @@ it('expires a positive probe, honors the shared limit and recovers after Retry-A
   expect(await (await probe()).json()).toEqual({ready:true});
   expect(recovered).toHaveBeenCalledOnce();
  }finally{time.mockRestore();}
+});
+it('shares the cooldown across OSRM paths and permits only one recovery request',async()=>{
+ const origin='https://shared-roads.test',env=config({ROAD_ROUTING_URL:origin});
+ const route=origin+'/route/v1/driving/public-fixture',table=origin+'/table/v1/driving/public-fixture';
+ const clock=vi.spyOn(Date,'now').mockReturnValue(100000);
+ const throttled=external(()=>new Response('Busy',{status:429,headers:{'Retry-After':'30'}}));
+ expect((await osrmRequest(env,route,{},8000)).status).toBe(429);
+ expect((await call('/api/navigation/readiness',{}, {env})).status).toBe(503);
+ await expect(osrmRequest(env,table,{},8000)).rejects.toMatchObject({code:'ROAD_PROVIDER_RATE_LIMIT'});
+ expect(throttled).toHaveBeenCalledOnce();
+ clock.mockReturnValue(130000);
+ let finish!:(response:Response)=>void;
+ let signalStarted!:()=>void;
+ const started=new Promise<void>(resolve=>{signalStarted=resolve;});
+ const pendingProvider=external(()=>new Promise<Response>(resolve=>{finish=resolve;signalStarted();}));
+ const recovery=osrmRequest(env,table,{},8000);
+ await started;
+ await expect(osrmRequest(env,route,{},8000)).rejects.toMatchObject({code:'ROAD_VERIFICATION_BUSY'});
+ finish(json({code:'Ok'}));
+ expect((await recovery).status).toBe(200);
+ expect(pendingProvider).toHaveBeenCalledOnce();
+ const healthy=external(()=>json({code:'Ok'}));
+ expect((await osrmRequest(env,route,{},8000)).status).toBe(200);
+ expect(healthy).toHaveBeenCalledOnce();
 });

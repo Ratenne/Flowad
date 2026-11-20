@@ -1,9 +1,10 @@
 import type {Env,Point,Route} from './types';
 import {distance,Failure,hash,httpsBase} from './utils';
 import {readyTable} from './road-readiness';
+import {osrmRequest} from './road-provider';
 import {nearby,type Poi} from './poi';
 import {finish,point} from './routing';
-import {issue} from './tickets';
+import {issueCourseCredentials} from './tickets';
 import {battery,type Input} from './recommendations';
 import {attachStoredGooglePlace} from './google-place-mapping';
 export const dynamicPolicy=Object.freeze({candidates:20,beamWidth:14,routeChecks:5,results:5,tableMs:8000,totalMs:110000,maxSnapMeters:100,maxDetour:4});
@@ -32,8 +33,12 @@ export async function matrix(points:Point[],env:Env,signal?:AbortSignal){
  // Origins/returns and every final Route retain the strict 100m radius.
  const url=`${base(env)}/table/v1/driving/${coords}?annotations=duration,distance&generate_hints=false&radiuses=${points.map(p=>p.type==='SCENIC_WAYPOINT'?'unlimited':dynamicPolicy.maxSnapMeters).join(';')}`;
  let response;
- try{response=await readyTable(url,signal,dynamicPolicy.tableMs,env.FREE_PLAN_MODE==='true');}
- catch(e){return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');}
+ try{response=await readyTable(url,signal,dynamicPolicy.tableMs,env.FREE_PLAN_MODE==='true',{request:(url,init,timeout)=>osrmRequest(env,url,init,timeout)});}
+ catch(e){
+  if(e instanceof Failure&&e.code==='ROAD_PROVIDER_RATE_LIMIT')return fail('rate_limit',e.code,e.retryAfterSeconds);
+  if(e instanceof Failure&&e.code==='ROAD_VERIFICATION_BUSY')return fail('road_recovery_in_progress','ROAD_TABLE_UNAVAILABLE',e.retryAfterSeconds);
+  return fail(signal?.aborted?'cancelled':e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT'?'timeout':e instanceof Failure&&e.code==='RESPONSE_TOO_LARGE'?'response_too_large':'connection_failure');
+ }
  httpStatus=response.status;
  if(response.challenged)return fail('provider_challenge','ROAD_PROVIDER_CHALLENGE');
  if(response.status===429)return fail('rate_limit','ROAD_PROVIDER_RATE_LIMIT',response.retryAfterSeconds??30);
@@ -177,7 +182,7 @@ export async function generate(r:Input,env:Env,signal?:AbortSignal){
    origin:routePoints[0],scenicWaypoints:routePoints.filter(p=>p.type==='SCENIC_WAYPOINT'),destination:routePoints.find(p=>p.type==='DESTINATION'),returnPoint:roundTrip?routePoints.at(-1):null,
    distanceTimeStatus:route.status,batteryStatus:status,vehicleTransferAllowed:false,vehicleTransferCondition:'ROAD_VERIFICATION_THEN_EXPLICIT_USER_APPROVAL_REQUIRED',
    dataSource:{course:sources.join(' + '),distanceTime:route.provider,weather:(r.courseWeather?.[id]??r.weather)?.source??'예시 날씨',weatherObservedAt:(r.courseWeather?.[id]??r.weather)?.observedAt??null,generatedAt:route.generatedAt,attribution:'© OpenStreetMap contributors (ODbL); 한국관광공사 TourAPI (해당 자료)'},
-   route,navigationTicket:await issue(id,route,env.NAVIGATION_TICKET_SECRET)});
+   route,...await issueCourseCredentials(id,route,env.NAVIGATION_TICKET_SECRET)});
  }
  return {courses,weatherExcluded,timeExcluded,routingFailed,status:courses.length?'ESTIMATED_NOT_ROAD_ROUTED':'NO_FEASIBLE_ROUTE',guidance:courses.length?'주변 공개 POI 기반 추천입니다. 거리·시간은 추정이며 선택한 코스의 도로 확인이 필요합니다.':'조건을 충족하는 코스를 만들지 못했습니다. 출발지나 여정 시간을 조정하세요.',diagnostics:diagnostics()};
 }

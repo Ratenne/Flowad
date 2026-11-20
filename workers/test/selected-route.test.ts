@@ -1,7 +1,7 @@
 import {recommendWithRouting,recommendation as parseRecommendation} from '../src/legacy-recommendations';
 import {it,expect,vi} from 'vitest';
 import {call,base,config,external,json,authenticated} from './helpers';
-import {resolve} from '../src/tickets';
+import {resolve,issueCourseCredentials} from '../src/tickets';
 import {Sessions} from '../src/repository';
 import {now} from '../src/utils';
 import {issue} from '../src/tickets';
@@ -82,6 +82,47 @@ it('keeps invalid input as 400 and provider transport failure as 503 without ret
  const failed=await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e});expect(failed.status).toBe(503);expect(await failed.json()).toMatchObject({roadVerified:false,error:'PROVIDER_UNAVAILABLE'});expect(provider).toHaveBeenCalledTimes(1);
 });
 it('keeps the100m snap limit and rejects a selected provider outage',async()=>{const e=config({ROAD_ROUTING_URL:'https://roads.test'}),c=await recommendation(e);external(url=>{const response=roads(url);return response.json().then((v:unknown)=>{const data=v as {waypoints:{distance:number}[]};data.waypoints[0].distance=101;return json(data);});});expect(await(await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e})).json()).toMatchObject({roadVerified:false,error:'WAYPOINT_TOO_FAR_FROM_ROAD'});external(()=>{throw Error('network timeout');});expect(await(await call('/api/navigation/verify',{ticket:c.navigationTicket},{env:e})).json()).toMatchObject({roadVerified:false,error:'PROVIDER_UNAVAILABLE'});});
+
+it('recovers the same itinerary after a provider cooldown outlives the navigation ticket',async()=>{
+ const env=config({ROAD_ROUTING_URL:'https://recovery.test'});
+ const started=Date.now(),clock=vi.spyOn(Date,'now').mockReturnValue(started);
+ const points=[point(0,'ORIGIN','공개 출발',35.18,129.07),point(1,'SCENIC_WAYPOINT','공개 경유',35.2,129.2),point(2,'DESTINATION','공개 목적지',35.3,129.25),point(3,'RETURN','공개 복귀',35.18,129.07)];
+ const candidate=finish(points,{legs:[],status:'ESTIMATED_NOT_ROAD_ROUTED',provider:'TEST',geometryStatus:'NOT_AVAILABLE'},0,'UNAVAILABLE',[]);
+ const tokens=await issueCourseCredentials('dyn-recovery',candidate,env.NAVIGATION_TICKET_SECRET);
+ const verify=(body:Record<string,unknown>)=>call('/api/navigation/verify',body,{env});
+ const throttled=external(()=>new Response('Busy',{status:429,headers:{'Retry-After':'120'}}));
+ expect((await verify({ticket:tokens.navigationTicket,selectionToken:tokens.selectionToken})).status).toBe(400);
+ expect((await call('/api/navigation/resolve',{ticket:tokens.selectionToken},{env})).status).toBe(400);
+ expect(await(await verify({selectionToken:tokens.navigationTicket})).json()).toMatchObject({error:'INVALID_SELECTION'});
+ expect(throttled).not.toHaveBeenCalled();
+ clock.mockReturnValue(started+295000);
+ const first=await verify({selectionToken:tokens.selectionToken});
+ expect(first.status).toBe(503);
+ expect(first.headers.get('Retry-After')).toBe('120');
+ expect(await first.json()).toMatchObject({roadVerified:false,error:'ROAD_PROVIDER_RATE_LIMIT'});
+ clock.mockReturnValue(started+301000);
+ expect(await(await verify({ticket:tokens.navigationTicket})).json()).toMatchObject({error:'TICKET_EXPIRED'});
+ const blocked=await verify({selectionToken:tokens.selectionToken});
+ expect(blocked.headers.get('Retry-After')).toBe('114');
+ expect(throttled).toHaveBeenCalledOnce();
+ clock.mockReturnValue(started+415000);
+ const provider=external(url=>{
+  const path=new URL(url);
+  expect(path.searchParams.get('radiuses')).toBe('100;100;100;100');
+  expect(path.pathname.split('/').at(-1)).toBe(points.map(p=>p.longitude+','+p.latitude).join(';'));
+  return json({code:'Ok',waypoints:points.map(p=>({distance:0,location:[p.longitude,p.latitude]})),routes:[{legs:points.slice(1).map(()=>({distance:10000,duration:600}))}]});
+ });
+ const success=await verify({selectionToken:tokens.selectionToken});
+ const data=await success.json() as {roadVerified:boolean;navigationTicket:string};
+ expect(success.status).toBe(200);
+ expect(data.roadVerified).toBe(true);
+ const proof=await resolve(data.navigationTicket,env.NAVIGATION_TICKET_SECRET);
+ expect(proof.route.points).toEqual(points);
+ expect(proof.expiresAt-now()).toBe(300);
+ clock.mockReturnValue(started+1800000);
+ expect(await(await verify({selectionToken:tokens.selectionToken})).json()).toMatchObject({error:'SELECTION_EXPIRED'});
+ expect(provider).toHaveBeenCalledOnce();
+});
 it('invalidates an old unsent Tesla plan if the next selected verification fails',async()=>{
  const a=await authenticated({},config({TESLA_CLIENT_ID:'public',TESLA_CLIENT_SECRET:'public',TESLA_REDIRECT_URI:'https://flowad.test/api/tesla/callback',ROAD_ROUTING_URL:'https://roads.test'}));
  const l=await new Sessions(a.env).open(a.id);l.data.plan={id:'old',vehicle:'car',expires:now()+300,stops:[],attempted:0,status:'NOT_SENT',vehicleStatus:'VEHICLE_NOT_CONFIRMED',pending:false,roadVerified:true};await l.save(true);

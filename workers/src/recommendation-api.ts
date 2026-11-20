@@ -3,7 +3,7 @@ import {z} from 'zod';
 import type {Bindings} from './types';
 import {recommendation,recommend} from './recommendations';
 import {resolve} from './tickets';
-import {selectedRequest,verifySelected} from './selected-route';
+import {roadVerificationRequest,verifySelected} from './selected-route';
 import {Failure,hash,nonce,now} from './utils';
 import {dynamicPolicy} from './dynamic-recommendations';
 import {navigationReadiness} from './navigation-readiness';
@@ -38,7 +38,7 @@ export function mountRecommendationApi(app:Hono<Bindings>){
   try{const r=z.object({ticket:z.string()}).parse(await c.req.json());return c.json(await resolve(r.ticket,c.env.NAVIGATION_TICKET_SECRET));}catch{return c.body(null,400);}
  });
  app.post('/api/navigation/verify',async c=>{
-  const parsed=selectedRequest.safeParse(await c.req.json().catch(()=>null));
+  const parsed=roadVerificationRequest.safeParse(await c.req.json().catch(()=>null));
   if(!parsed.success)return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:'INVALID_REQUEST'},400);
   try{return c.json(await verifySelected(parsed.data,c.env));}
   catch(e){const error=e instanceof Failure?e:new Failure('SERVICE_UNAVAILABLE',503);if(error.retryAfterSeconds)c.header('Retry-After',String(error.retryAfterSeconds));return c.json({verificationStatus:'ROAD_ROUTE_UNAVAILABLE',roadVerified:false,error:error.code,...error.context},error.status);}

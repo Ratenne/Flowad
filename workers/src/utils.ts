@@ -66,7 +66,7 @@ export function httpsBase(raw: string): string {
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
 type UpstreamDiagnostics = {viaRender:boolean;renderRouting?:string;renderRequestId?:string;rayId?:string};
 type UpstreamResponse = {status:number;data:unknown;retryAfterSeconds?:number;challenged?:boolean;diagnostics?:UpstreamDiagnostics};
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<UpstreamResponse> {
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000, {stopAtRateLimit=false}={}): Promise<UpstreamResponse> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
@@ -88,8 +88,8 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
     }
     // A browser challenge is not an OSRM response or a request-rate allowance.
     // Do not parse, log, relay or attempt to solve its HTML/clearance tokens.
-    if(response.headers.get('cf-mitigated')==='challenge'){
-      result.challenged=true;
+    if(response.headers.get('cf-mitigated')==='challenge')result.challenged=true;
+    if(result.challenged||stopAtRateLimit&&result.status===429){
       await response.body?.cancel().catch(()=>undefined);
       return result;
     }

@@ -1,7 +1,8 @@
-import {checkProviderLimit,providerLimited,providerReady} from './navigation-readiness';
+import {providerReady} from './navigation-readiness';
+import {osrmRequest} from './road-provider';
 import anchorsData from '../../backend/src/main/resources/anchors.json';
 import type { Env, Leg, Point, Route } from './types';
-import { coordinate, distance, Failure, httpJson, httpsBase, round } from './utils';
+import { coordinate, distance, Failure, httpsBase, round } from './utils';
 const anchors: Record<string, {capturedAt: string; anchors: {label: string; coordinate: number[]; snap_distance_m: number}[]}> = anchorsData;
 function object(value:unknown):Record<string,unknown>{if(!value||typeof value!=='object'||Array.isArray(value))throw new Failure('INVALID_PROVIDER_RESPONSE');return value as Record<string,unknown>;}
 function number(value:unknown):number{if(typeof value!=='number'||!Number.isFinite(value))throw new Failure('INVALID_PROVIDER_RESPONSE');return value;}
@@ -22,15 +23,14 @@ export async function road(points: Point[], env: Env, includeGeometry=env.FREE_P
 async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords=points.map(p=>`${p.longitude},${p.latitude}`).join(';'),signal?:AbortSignal){
   if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
   let response;
-  checkProviderLimit(env.ROAD_ROUTING_URL);
   const started=performance.now();
-  try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await httpJson(`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},25000); }
+  try {const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL); response = await osrmRequest(env,`${base}/route/v1/driving/${coords}?steps=${includeGeometry}&geometries=geojson&overview=false&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},25000); }
   catch(e) {
+    if(e instanceof Failure&&['ROAD_PROVIDER_RATE_LIMIT','ROAD_VERIFICATION_BUSY'].includes(e.code))throw e;
     const timeout=e instanceof Failure&&e.code==='UPSTREAM_TIMEOUT';
     console.warn(JSON.stringify({event:'osrm_route_failure',reason:timeout?'timeout':'connection_failure',elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
     throw new Failure(timeout?'ROAD_PROVIDER_TIMEOUT':'PROVIDER_UNAVAILABLE',503,20);
   }
-  if(!response.challenged&&response.status===429)providerLimited(env.ROAD_ROUTING_URL,response.retryAfterSeconds??30);
   if(response.status!==200){
     const diagnostics=env.SAFE_UPSTREAM_DIAGNOSTICS==='true'?{retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged,...response.diagnostics}:undefined;
     console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length,...diagnostics}));
@@ -105,7 +105,7 @@ export async function roadSimplified(points:Point[],env:Env,signal?:AbortSignal)
  if(!env.ROAD_ROUTING_URL)throw new Failure('ROAD_ROUTE_REQUIRED');
  const u=new URL(env.ROAD_ROUTING_URL),base=u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)?u.origin:httpsBase(env.ROAD_ROUTING_URL);
  const coords=points.map(p=>p.longitude+','+p.latitude).join(';');
- const response=await httpJson(`${base}/route/v1/driving/${coords}?steps=false&geometries=geojson&overview=simplified&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000);
+  const response=await osrmRequest(env,`${base}/route/v1/driving/${coords}?steps=false&geometries=geojson&overview=simplified&generate_hints=false&radiuses=${points.map(()=>100).join(';')}`,{signal},8000);
  const summary=roadResponse(points,response,false);
  const root=object(response.data),raw=object((root.routes as unknown[])[0]);
  if(!raw.geometry)return roadResponse(points,response,true);

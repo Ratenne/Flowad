@@ -21,12 +21,12 @@ Tesla 웹 준비도 먼저 `/api/navigation/verify`를 호출한다. 검증 티�
 `/api/navigation/readiness`는 운영 점검용으로 공개 기준점의 OSRM nearest JSON을 확인한다. 미준비 응답은 202다. 브라우저의 코스 검증은 선택한 코스의 Route를 바로 요청하며 별도의 readiness 호출이나 폴링을 하지 않는다. 정상 Route 응답은 readiness 정상 캐시에도 반영한다. Tesla 전송 준비에서 이미 검증된 티켓을 재사용하며 서버는 티켓 서명과 만료를 확인한다. readiness 요청은 8초, Route는 25초로 제한한다.
 
 - Route 시간 초과: `ROAD_PROVIDER_TIMEOUT`/503. 연결 실패: `PROVIDER_UNAVAILABLE`/503. HTTP 상태와 소요 시간·지점 수만 진단 로그에 기록한다.
-- 429: `ROAD_PROVIDER_RATE_LIMIT`/503 및 Retry-After. challenge, 403과 구분하고 자동 재시도하지 않는다.
+- 429: `ROAD_PROVIDER_RATE_LIMIT`/503 및 Retry-After. challenge, 403과 구분한다. 알려진 OSRM 호스트별 대기 시간을 기존 D1에 공유하고, 대기 종료 후 한 Worker 요청만 먼저 원본을 확인한다. Route·Nearest·Table에 공통 적용하며 Table도 429에서 자동 재시도하지 않는다.
 
 2026-11-20 운영 조사에서 Cloudflare 요청 분석의 공개 기준점 `/nearest` 429 표본 5건(07:45, 07:46, 07:47, 08:34, 09:21 KST)은 모두 원본과 에지 상태가 429였다. 동일 호스트의 Security Events 조회 결과는 0건이었다. Render 애플리케이션 로그에는 09:25:42 KST OSRM 기동이 기록됐다. 복귀 후 커스텀 도메인과 `flowad-roads.onrender.com`에서 같은 nearest 요청이 HTTP 200과 OSRM `Ok`를 반환했다. Render 무료 플랜의 요청 로그는 비활성이라 과거 429의 원본 헤더·임계값을 복원할 수 없었다. Worker는 이후 실패 응답의 상태, Retry-After와 사용 가능한 Render 라우팅·연관 ID만 기록한다. Cloudflare 보안 규칙은 변경하지 않았다.
 - `NoSegment`: `WAYPOINT_TOO_FAR_FROM_ROAD`/400. OSRM 메시지에 좌표 인덱스가 있거나 스냅 거리 검사에서 실패하면 `waypointOrders`와 `courseId`를 응답한다. 화면에는 해당 지점 이름만 표시한다. 제공자가 인덱스를 주지 않으면 임의로 추측하지 않는다.
 - `NoRoute`: `NO_ROAD_ROUTE`/400. 잘못된 입력은 `INVALID_REQUEST`/400.
-- 서명 검증이 끝난 만료 티켓은 `TICKET_EXPIRED`/400, 변조·형식 오류는 `INVALID_TICKET`/400. 잘못된 티켓으로 도로 재시도를 반복하지 않고 새 추천 버튼을 제공한다. 5분 만료와 서명 검사는 유지한다.
+- 서명 검증이 끝난 만료 티켓은 `TICKET_EXPIRED`/400, 변조·형식 오류는 `INVALID_TICKET`/400이다. 추천에 별도 서명된 `selectionToken`을 함께 반환한다. 이 값은 30분 동안 `/api/navigation/verify`에만 사용할 수 있다. 사용자가 직접 다시 확인하고 전체 경로가 기존 100m 검사에 통과하면 새 5분 검증 티켓을 만든다. 기존 티켓도 verify에 계속 사용할 수 있으며 같은 요청에 두 자격을 함께 보내면 거부한다. resolve, Tesla, Pleos는 기존 Navigation Ticket 계약을 사용한다.
 - 브라우저의 공통 진행 잠금과 같은 isolate의 동일 검증 Promise 공유로 동시 중복을 막는다. 완료 후 캐시하지 않아 수동 재시도가 가능하다. 전역 isolate 간 요청 병합을 보장하지는 않는다.
 
 ## 차량별 범위와 지도
@@ -38,6 +38,8 @@ Pleos는 기존 NaviHelper 어댑터의 구간당 최대 2개 경유지+목적�
 Naver 공식 배포 SDK `maps.js`에서 `kr-col-ext.nelo.navercorp.com/_store`는 `log`, `logLevel`, `projectName`, `projectVersion`을 보내는 별도 XMLHttpRequest이며 예외가 내부 처리된다. 기존 CSP를 유지한 운영 Chrome에서 지도 타일과 출발지 마커가 정상 표시되는 것을 확인했다. 이 로그 도메인을 connect-src에 추가하지 않는다. 기존 Copernicus 지형 파일·색상·음영·렌더러·대표 마커와 2D fallback은 변경하지 않았다.
 
 ## 검증·배포·복구
+
+공유 대기 상태를 도입한 Worker 배포 전에 기존 운영 D1에 `0006_road_provider_cooldown.sql`을 적용한다. 테이블은 제공자 origin과 두 타임스탬프만 저장한다. 경유지 좌표·추천 선택 토큰·Navigation Ticket은 이 테이블에 기록하지 않는다.
 
 `npm run check:ci`에 readiness 검사를 추가했다. 회귀 검사는 기본 추정 추천의 경유지·목적지 분리, 편도/왕복, 저장 순서, 전체 좌표의 단일 Route 전송, 검증 티켓 resolve, Tesla 준비(명령 없음), 지연/503/429/challenge/NoSegment/NoRoute/입력 오류/티켓 만료 및 동시 검증·수동 재시도를 포함한다. Android는 `scripts/pleos-gradle.sh testDebugUnitTest assembleDebug assembleDebugAndroidTest`로 확인한다. 실제 기기 없이 계측 APK 빌드만으로 기기 테스트 통과를 주장하지 않는다.
 

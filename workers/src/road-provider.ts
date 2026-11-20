@@ -26,8 +26,7 @@ export async function recordRoadCooldown(env:Env,origin:string,seconds:number){
    ON CONFLICT(origin) DO UPDATE SET retry_until=MAX(retry_until,excluded.retry_until),probe_until=0`).bind(origin,until).run();
 }
 
-export async function osrmRequest(env:Env,url:string,init:RequestInit|undefined,timeout=10000){
- const origin=new URL(url).origin;
+export async function acquireRoadRecovery(env:Env,origin:string,timeout:number){
  const state=await cooldown(env,origin),at=Date.now();
  check(state,at);
  let probeUntil=0;
@@ -41,11 +40,20 @@ export async function osrmRequest(env:Env,url:string,init:RequestInit|undefined,
    throw new Failure('ROAD_VERIFICATION_BUSY',503,3);
   }
  }
+ return probeUntil;
+}
+
+export async function finishRoadRecovery(env:Env,origin:string,probeUntil:number){
+ if(probeUntil)await env.DB.prepare('DELETE FROM road_provider_cooldown WHERE origin=? AND probe_until=?').bind(origin,probeUntil).run();
+}
+
+export async function osrmRequest(env:Env,url:string,init:RequestInit|undefined,timeout=10000){
+ const origin=new URL(url).origin,probeUntil=await acquireRoadRecovery(env,origin,timeout);
  const response=await httpJson(url,init,timeout,{stopAtRateLimit:true});
  if(response.status===429&&!response.challenged){
   await recordRoadCooldown(env,origin,response.retryAfterSeconds??30);
  }else if(probeUntil&&!response.challenged&&answeredByOsrm(response)){
-  await env.DB.prepare('DELETE FROM road_provider_cooldown WHERE origin=? AND probe_until=?').bind(origin,probeUntil).run();
+  await finishRoadRecovery(env,origin,probeUntil);
  }
  return response;
 }

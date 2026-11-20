@@ -14,7 +14,8 @@ function enabled(overrides:Parameters<typeof config>[0]={},review={}){
  });
 }
 const read=(env:ReturnType<typeof enabled>)=>env.DB.prepare('SELECT attempts,successes,rate_limits,failure_streak,stop_reason FROM road_keepalive_experiments').first();
-const ok=(cacheStatus='DYNAMIC')=>new Response(JSON.stringify({code:'Ok',waypoints:[{}]}),{
+const nearest={code:'Ok',waypoints:[{location:[126.978,37.5665],distance:4}]};
+const ok=(cacheStatus='DYNAMIC')=>new Response(JSON.stringify(nearest),{
  headers:{'x-render-origin-server':'Render','rndr-id':'abcdabcd-abcd-1234','cf-cache-status':cacheStatus}
 });
 const cron=(name:string)=>({cron:name,scheduledTime:Date.now()}) as ScheduledController;
@@ -56,7 +57,20 @@ it('claims a single cache-bypassing origin Nearest per slot and stops on expiry'
  expect(upstream).toHaveBeenCalledOnce();
 });
 
-it('shares 429 backoff, lets foreground recover first and stops after a second probe 429',async()=>{
+it.each([
+ [{ROAD_KEEPALIVE_START_AT:undefined},'missing_start_at'],
+ [{ROAD_KEEPALIVE_REVIEW:undefined},'missing_operator_review'],
+ [{ROAD_KEEPALIVE_REVIEW:'{}'},'invalid_operator_review']
+] as const)('logs the reason before the first experiment row exists',async(overrides,reason)=>{
+ vi.spyOn(Date,'now').mockReturnValue(starts);
+ const log=vi.spyOn(console,'log'),env=enabled(overrides),upstream=external(()=>ok());
+ await worker.scheduled(cron(keepaliveCron),env);
+ expect(log).toHaveBeenCalledWith(JSON.stringify({event:'osrm_keepalive_skip',reason}));
+ expect(await read(env)).toBeNull();
+ expect(upstream).not.toHaveBeenCalled();
+});
+
+it('shares 429 backoff and stops after a second probe 429 following expiry',async()=>{
  const time=vi.spyOn(Date,'now').mockReturnValue(starts);
  const env=enabled(),rate=()=>new Response('',{status:429,headers:{'Retry-After':'900'}});
  const upstream=external(rate);
@@ -66,17 +80,32 @@ it('shares 429 backoff, lets foreground recover first and stops after a second p
  });
  time.mockReturnValue(starts+interval);
  await runRoadKeepalive(env,Date.now());
- time.mockReturnValue(starts+2*interval);
- await runRoadKeepalive(env,Date.now());
  expect(upstream).toHaveBeenCalledOnce();
- external(()=>json({code:'Ok'}));
- expect((await osrmRequest(env,origin+'/route/v1/driving/fixture',{})).status).toBe(200);
+ expect(await read(env)).toMatchObject({attempts:1,successes:0});
+ time.mockReturnValue(starts+2*interval);
  const next=external(rate);
  await runRoadKeepalive(env,Date.now());
  expect(await read(env)).toMatchObject({attempts:2,rate_limits:2,stop_reason:'repeated_429'});
  time.mockReturnValue(starts+3*interval);
  await runRoadKeepalive(env,Date.now());
  expect(next).toHaveBeenCalledOnce();
+});
+
+it('resumes after both timers expire and counts a valid headerless Nearest only once',async()=>{
+ const time=vi.spyOn(Date,'now').mockReturnValue(starts);
+ const env=enabled(),upstream=external(()=>json(nearest));
+ await env.DB.prepare('INSERT INTO road_provider_cooldown VALUES(?,?,?)').bind(origin,starts-1,starts+interval).run();
+ await worker.scheduled(cron(keepaliveCron),env);
+ expect(await read(env)).toMatchObject({attempts:0,successes:0});
+ time.mockReturnValue(starts+interval);
+ await Promise.all([worker.scheduled(cron(keepaliveCron),env),worker.scheduled(cron(keepaliveCron),env)]);
+ expect(await read(env)).toMatchObject({attempts:1,successes:1});
+ expect(await env.DB.prepare('SELECT origin FROM road_provider_cooldown').first()).toBeNull();
+ expect(upstream).toHaveBeenCalledOnce();
+ time.mockReturnValue(starts+2*interval);
+ external(()=>json({code:'Ok',waypoints:[{}]}));
+ await worker.scheduled(cron(keepaliveCron),env);
+ expect(await read(env)).toMatchObject({attempts:2,successes:1});
 });
 
 it('skips recent foreground traffic and stops when the measured user success rate drops',async()=>{

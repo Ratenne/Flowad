@@ -22,8 +22,8 @@ Render **Billing → Monthly Included Usage**의 워크스페이스 실제 사�
 
 ## 프로브와 중단
 
-- 10분 슬롯마다 최대 한 번 `https://flowad-roads.ravirgo.com/nearest/v1/driving/126.978,37.5665?number=1`에 GET을 보낸다. 서울 공개 기준점의 Nearest를 사용한다. 8초 타임아웃, 캐시 비저장, 리디렉션 차단을 적용한다. HTTP 200, OSRM `Ok`와 한 개의 결과, Render 원본 헤더·요청 ID, Cloudflare `DYNAMIC` 또는 `BYPASS`가 함께 있을 때 성공으로 기록한다. Render 기본 호스트 `flowad-roads.onrender.com`은 원본 비교에 사용할 수 있다. 프로브는 운영과 같은 커스텀 도메인을 사용한다.
-- D1이 시간 슬롯을 한 번만 선점한다. 최근 30초에 사용자 검증 요청이 있었거나 제공자 429 대기·복구가 남아 있으면 건너뛴다. 프로브는 사용자의 복구 요청 자리를 선점하지 않는다. 프로브의 429는 기존 제공자 공용 대기에 기록하고 즉시 재시도하지 않는다.
+- 10분 슬롯마다 최대 한 번 `https://flowad-roads.ravirgo.com/nearest/v1/driving/126.978,37.5665?number=1`에 GET을 보낸다. 서울 공개 기준점의 Nearest를 사용한다. 8초 타임아웃, 캐시 비저장, 리디렉션 차단을 적용한다. HTTP 200이고 OSRM `Ok`와 유효한 좌표·거리를 갖춘 단일 waypoint가 있으면 성공으로 기록한다. 명시적 캐시 응답(HIT, STALE, UPDATING, REVALIDATED)과 챌린지는 제외한다. Render 헤더와 요청 ID는 원본 도달 여부를 대조하는 보조 자료다. 성공 횟수만으로 원본 기동을 증명할 수 없다. Render 기본 호스트 `flowad-roads.onrender.com`은 원본 비교에 사용할 수 있다. 프로브는 운영과 같은 커스텀 도메인을 사용한다.
+- D1이 시간 슬롯을 한 번만 선점한다. 최근 30초에 사용자 검증 요청이 있었거나 제공자 429 대기·복구가 남아 있으면 건너뛴다. 대기와 진행 중인 복구 잠금이 모두 만료되면 프로브와 사용자 요청 중 하나만 D1 복구 잠금을 얻는다. 정상 프로브는 자신이 획득한 잠금만 해제한다. 프로브의 429는 기존 제공자 공용 대기에 기록하고 즉시 재시도하지 않는다.
 - 실험 중 프로브 429가 2회 발생하거나 실패가 3회 연속이면 자동 중단한다. 접근 제한·보안 챌린지는 첫 관측에서 중단한다. 적격 사용자 검증 요청이 20건 이상이고 그 성공률이 기준선보다 10%p 넘게 낮으면 다음 Cron에서 멈춘다. 검토 실패와 실험 기간 종료도 추가 요청을 막는다. 같은 실험의 `stop_reason`이 기록되면 해당 시작 시각을 재사용해 재개할 수 없다.
 - 수동 중단은 `ROAD_KEEPALIVE_ENABLED=false` 배포로 한다. 활성 실험을 즉시 중단하려면 D1의 해당 `starts_at` 행에 `stop_reason='operator_stop'`을 설정한다. 이미 발송된 1건은 8초 이내에 종료된다. 코드 롤백은 직전 Worker 버전을 활성화하고 이전 Cron 목록으로 복구한다. 운영 도로 서버 설정 변경은 필요 없다.
 
@@ -31,8 +31,8 @@ Render **Billing → Monthly Included Usage**의 워크스페이스 실제 사�
 
 | 지표 | 위치 |
 | --- | --- |
-| 실험 요청 시각, 응답 상태·시간, 성공·실패·타임아웃, 429, Retry-After | Workers Observability에서 `osrm_keepalive_probe` 검색. 중단은 `osrm_keepalive_stop`. |
-| 실제 실행 요청 수, 성공·429 횟수, 연속 실패, 적격 사용자 성공률, 중단 사유 | 기존 D1의 `road_keepalive_experiments`. 시간 값은 Unix 밀리초. |
+| 실험 요청 시각, 응답 상태·시간, 성공·실패·타임아웃, 429, Retry-After | Workers Observability에서 `osrm_keepalive_probe` 검색. 중단은 `osrm_keepalive_stop`. 활성화 후 시작 시각이나 운영 검토 설정이 빠지면 첫 D1 행 생성 전에도 `osrm_keepalive_skip`의 `reason`에 원인이 남는다. |
+| 발송 직전 기록한 시도 수(attempts), 유효한 응답 수(successes)·429 횟수, 연속 실패, 적격 사용자 성공률, 중단 사유 | 기존 D1의 `road_keepalive_experiments`. 시간 값은 Unix 밀리초. |
 | 실제 사용자 응답 성공률, 25초 초과, 타임아웃, 브라우저 수동 재시도 | Observability의 `road_verification`. 초기 요청과 같은 코스의 실패 후 다음 브라우저 요청을 구분한다. 다른 클라이언트나 페이지 새로고침 이후의 수동 재시도는 확인 범위 밖이다. |
 | 원본 Route의 실제 요청 수·응답 코드·시간 | `osrm_route_success`와 `osrm_route_failure`. API의 503과 원본의 429를 따로 집계한다. `osrm_keepalive_probe`는 사용자 Route 집계에서 제외한다. |
 | 절전·기동 횟수, 기동 직후 지연, CPU·RAM과 무료 시간 | Render Metrics, Events·Application Logs의 OSRM 기동 기록, Billing의 실제 사용량. Worker 타임아웃만으로 절전이나 재기동을 추정하지 않는다. |

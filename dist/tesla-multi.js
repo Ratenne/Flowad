@@ -7,7 +7,7 @@ function coverageMarkup(coverage){
 }
 export function multiEntryMarkup(id,enabled){
  if(!enabled)return '';
- return '<section><h4>Tesla 경유지 전송 준비</h4><p>경유지와 방문 순서를 확인한 뒤 차량 전송을 승인할 수 있어요.</p><label>점검 방식 <select id="teslaMultiStrategy"><option value="GPS_ORDERED">GPS · 방문 순서대로 추가</option><option value="WAYPOINTS">Waypoints · 전체 코스 한 번에 등록</option></select></label><button class="button-secondary" data-tesla-multi-preview="'+safe(id)+'">전체 코스 전송 준비 · 도로 확인</button><button class="button-secondary" data-copy-stops="'+safe(id)+'">전체 방문 순서 복사</button></section>';
+ return '<section><h4>Tesla 경유지 전송 준비</h4><p>경유지와 방문 순서를 확인한 뒤 차량 전송을 승인할 수 있어요.</p><label>점검 방식 <select id="teslaMultiStrategy"><option value="GPS_ORDERED">GPS · 방문 순서대로 추가</option><option value="WAYPOINTS">Waypoints · 전체 코스 한 번에 등록</option></select></label><button class="button-secondary" data-tesla-multi-preview="'+safe(id)+'">전체 코스 전송 준비</button><button class="button-secondary" data-copy-stops="'+safe(id)+'">전체 방문 순서 복사</button></section>';
 }
 export function multiPreviewMarkup(plan,courseId){
  const mapping=plan.strategy==='WAYPOINTS'&&!plan.googlePlaceCoverage?.complete?'<button class="button-secondary" data-map-places>Google Maps 장소 확인</button><button class="button-secondary" data-strategy="GPS_ORDERED" data-tesla-multi-preview="'+safe(courseId)+'">GPS 방식으로 준비</button>':'';

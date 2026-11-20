@@ -31,7 +31,10 @@ async function requestRoad(points:Point[],env:Env,includeGeometry:boolean,coords
     throw new Failure(timeout?'ROAD_PROVIDER_TIMEOUT':'PROVIDER_UNAVAILABLE',503,20);
   }
   if(!response.challenged&&response.status===429)providerLimited(env.ROAD_ROUTING_URL,response.retryAfterSeconds??30);
-  if(response.status!==200)console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length}));
+  if(response.status!==200){
+    const diagnostics=env.SAFE_UPSTREAM_DIAGNOSTICS==='true'?{retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged,...response.diagnostics}:undefined;
+    console.warn(JSON.stringify({event:'osrm_route_failure',httpStatus:response.status,elapsedMs:Math.round(performance.now()-started),coordinateCount:points.length,...diagnostics}));
+  }
   return response;
 }
 export function roadResponse(points:Point[],response:{status:number;data:unknown;challenged?:boolean;retryAfterSeconds?:number},includeGeometry:boolean):Pick<Route,'legs'|'status'|'provider'|'geometryStatus'> {

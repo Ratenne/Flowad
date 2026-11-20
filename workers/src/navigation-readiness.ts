@@ -29,14 +29,19 @@ export async function navigationReadiness(env:Env){
   let response;
   try{response=await httpJson(base+'/nearest/v1/driving/126.978,37.5665?number=1',{},8000);}
   catch{return warming();}
-  if(response.status!==200&&env.SAFE_UPSTREAM_DIAGNOSTICS==='true')console.warn(JSON.stringify({event:'osrm_readiness',status:response.status,retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged===true,viaRender:response.viaRender,viaCloudflare:response.viaCloudflare}));
+  if(response.status!==200&&env.SAFE_UPSTREAM_DIAGNOSTICS==='true'){
+   console.warn(JSON.stringify({event:'osrm_readiness',status:response.status,retryAfterSeconds:response.retryAfterSeconds,challenged:response.challenged,...response.diagnostics}));
+  }
   if(response.challenged)throw new Failure('ROAD_PROVIDER_CHALLENGE',503);
-  if(response.status===429)providerLimited(key,response.retryAfterSeconds??30);
-  if(response.status===429)throw new Failure('ROAD_PROVIDER_RATE_LIMIT',503,response.retryAfterSeconds??30);
+  if(response.status===429){
+   providerLimited(key,response.retryAfterSeconds??30);
+   checkProviderLimit(key);
+  }
   if(response.status===403)throw new Failure('PROVIDER_PERMISSION_DENIED',503);
   if([502,503,504].includes(response.status))return warming();
   const data=response.data as {code?:string;waypoints?:unknown[]}|null;
   if(response.status!==200||data?.code!=='Ok'||!Array.isArray(data.waypoints)||data.waypoints.length!==1)throw new Failure('INVALID_PROVIDER_RESPONSE',503);
+  checkProviderLimit(key);
   providerReady(key);return {ready:true};
  })();
  pending.set(key,operation);

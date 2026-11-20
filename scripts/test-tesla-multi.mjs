@@ -17,14 +17,14 @@ assert.match(multiResultMarkup({commandStatus:'COMMAND_RESULT_UNKNOWN',requiresV
 
 // Execute the actual delegated click handler against synthetic DOM/API ports.
 // No browser, real location, OAuth or vehicle endpoint is used by this test.
-const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8');
+const app=readFileSync(new URL('../dist/app.js',import.meta.url),'utf8').replaceAll('\r\n','\n');
 const marker="$('#detailDialog').addEventListener('click',async e=>{\n const preview=e.target.closest('[data-tesla-multi-preview]')";
 const source=app.slice(app.indexOf(marker));assert(source.startsWith(marker));
 let handler;const calls=[],origin={},course={id:'dyn-test',navigationTicket:'MOCK_ESTIMATED'},resultNode={textContent:'',innerHTML:'',insertAdjacentHTML(_position,value){this.innerHTML+=value;}};
 const output={textContent:'',innerHTML:'',querySelector(){return resultNode;},insertAdjacentHTML(_position,value){this.innerHTML+=value;}};
 const state={integration:'none',location:origin},nodes={'#detailDialog':{addEventListener(_event,callback){handler=callback;}},'#teslaNavigationPreview':output,'#teslaMultiStrategy':{value:'GPS_ORDERED'},'#teslaMultiOrderConfirmed':{checked:true},'#teslaMultiResult':resultNode};
 const context=vm.createContext({$:selector=>nodes[selector],state,navigationBusy:false,navigationPlan:null,navigationOrigin:null,recommendations:[course],navigationErrors:{TICKET_EXPIRED:'추천 유효 시간이 지났어요.'},multiPreviewMarkup,multiResultMarkup,
- verifyRoad:async r=>{calls.push('verify');r.navigationTicket='MOCK_VERIFIED';return {navigationTicket:'MOCK_VERIFIED'};},
+ verifyRoad:async r=>{calls.push('verify');r.navigationTicket='MOCK_VERIFIED';r.vehicleTransferAllowed=true;return {navigationTicket:'MOCK_VERIFIED'};},
  teslaPost:async(path,body)=>{calls.push({path,body});if(path.endsWith('/preview'))return {...fixture};if(path.endsWith('/dry-run'))return {status:'DRY_RUN_VALIDATED',commandStatus:'COMMAND_NOT_SENT'};throw Error('unexpected endpoint');}
 });vm.runInContext(source,context);
 const click=async(selector,dataset={})=>{const button={dataset,disabled:false};await handler({target:{closest:key=>key===selector?button:null}});return button;};
@@ -32,6 +32,9 @@ await click('[data-tesla-multi-preview]',{teslaMultiPreview:'dyn-test'});assert.
 state.integration='tesla';await click('[data-tesla-multi-preview]',{teslaMultiPreview:'dyn-test'});
 assert.equal(calls[0],'verify');assert.equal(calls[1].path,'navigation/multi/preview');assert.equal(calls[1].body.ticket,'MOCK_VERIFIED');assert.equal(calls[1].body.strategy,'GPS_ORDERED');assert.equal(context.navigationBusy,false);
 await click('[data-tesla-multi-dry-run]');assert.equal(calls[2].path,'navigation/multi/dry-run');assert.deepEqual(Object.keys(calls[2].body),['planId']);assert.match(resultNode.innerHTML,/차량 명령 미전송/);
+await click('[data-tesla-multi-preview]',{teslaMultiPreview:'dyn-test',strategy:'WAYPOINTS'});
+assert.equal(calls.filter(c=>c==='verify').length,1);
+assert.equal(calls[3].body.ticket,'MOCK_VERIFIED');assert.equal(calls[3].body.strategy,'WAYPOINTS');
 assert.ok(calls.filter(c=>typeof c==='object').every(c=>!c.path.endsWith('/send')));
 context.teslaPost=async()=>{throw Error('TICKET_EXPIRED');};await click('[data-tesla-multi-preview]',{teslaMultiPreview:'dyn-test'});assert.equal(course.navigationTicket,null);assert.match(resultNode.innerHTML,/data-renew-navigation/);
 console.log('PASS: Tesla-only multi UI, complete visit list, disabled live send, escaped labels, verified-ticket preview, dry-run without commands, expiry recovery and API/vehicle result separation.');

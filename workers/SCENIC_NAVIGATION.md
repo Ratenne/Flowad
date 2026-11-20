@@ -18,10 +18,12 @@ Tesla 웹 준비도 먼저 `/api/navigation/verify`를 호출한다. 검증 티�
 
 운영의 이전 기록(`RECOMMENDATION_FAILURES.md`)에는 Render 앞단 HTTP 429 및 challenge가 있다. 현재 선택 코스 Route에는 Table용 준비 대기가 적용되지 않았고, 8초 통신 제한과 모든 통신 오류를 합친 503이 남아 있었다. 이번 확인에서 기존 운영의 정상 Route 응답도 재현했다. 기존 사용자의 모든 503을 절전 탓으로 단정할 근거는 없다.
 
-사용자 조작 때만 `/api/navigation/readiness`가 공개 기준점의 실제 OSRM nearest JSON을 확인한다. 미준비 응답은 202이며 브라우저에서 최대 4회, 20초 간격으로 확인한다. 정상 JSON 확인 후 선택 코스 검증을 한 번 실행한다. 개별 readiness 요청은 8초, Route는 25초, 전체 웹 작업은 125초로 제한한다. Worker 안에서 장시간 재시도 대기를 유지하지 않는다. 주기적인 keepalive는 추가하지 않는다. 서비스가 준비되지 않으면 명시적 재시도를 제공한다.
+`/api/navigation/readiness`는 운영 점검용으로 공개 기준점의 OSRM nearest JSON을 확인한다. 미준비 응답은 202다. 브라우저의 코스 검증은 선택한 코스의 Route를 바로 요청하며 별도의 readiness 호출이나 폴링을 하지 않는다. 정상 Route 응답은 readiness 정상 캐시에도 반영한다. Tesla 전송 준비에서 이미 검증된 티켓을 재사용하며 서버는 티켓 서명과 만료를 확인한다. readiness 요청은 8초, Route는 25초로 제한한다.
 
 - Route 시간 초과: `ROAD_PROVIDER_TIMEOUT`/503. 연결 실패: `PROVIDER_UNAVAILABLE`/503. HTTP 상태와 소요 시간·지점 수만 진단 로그에 기록한다.
 - 429: `ROAD_PROVIDER_RATE_LIMIT`/503 및 Retry-After. challenge, 403과 구분하고 자동 재시도하지 않는다.
+
+2026-11-20 운영 조사에서 Cloudflare 요청 분석의 공개 기준점 `/nearest` 429 표본 5건(07:45, 07:46, 07:47, 08:34, 09:21 KST)은 모두 원본과 에지 상태가 429였다. 동일 호스트의 Security Events 조회 결과는 0건이었다. Render 애플리케이션 로그에는 09:25:42 KST OSRM 기동이 기록됐다. 복귀 후 커스텀 도메인과 `flowad-roads.onrender.com`에서 같은 nearest 요청이 HTTP 200과 OSRM `Ok`를 반환했다. Render 무료 플랜의 요청 로그는 비활성이라 과거 429의 원본 헤더·임계값을 복원할 수 없었다. Worker는 이후 실패 응답의 상태, Retry-After와 사용 가능한 Render 라우팅·연관 ID만 기록한다. Cloudflare 보안 규칙은 변경하지 않았다.
 - `NoSegment`: `WAYPOINT_TOO_FAR_FROM_ROAD`/400. OSRM 메시지에 좌표 인덱스가 있거나 스냅 거리 검사에서 실패하면 `waypointOrders`와 `courseId`를 응답한다. 화면에는 해당 지점 이름만 표시한다. 제공자가 인덱스를 주지 않으면 임의로 추측하지 않는다.
 - `NoRoute`: `NO_ROAD_ROUTE`/400. 잘못된 입력은 `INVALID_REQUEST`/400.
 - 서명 검증이 끝난 만료 티켓은 `TICKET_EXPIRED`/400, 변조·형식 오류는 `INVALID_TICKET`/400. 잘못된 티켓으로 도로 재시도를 반복하지 않고 새 추천 버튼을 제공한다. 5분 만료와 서명 검사는 유지한다.

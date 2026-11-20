@@ -64,15 +64,34 @@ export function httpsBase(raw: string): string {
   return u.href.replace(/\/+$/, '');
 }
 // Timeout covers reading and parsing, not only response headers. Never retry commands or refresh tokens.
-export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<{ status: number; data: unknown; retryAfterSeconds?:number; challenged?:boolean;viaRender?:boolean;viaCloudflare?:boolean }> {
+type UpstreamDiagnostics = {viaRender:boolean;renderRouting?:string;renderRequestId?:string;rayId?:string};
+type UpstreamResponse = {status:number;data:unknown;retryAfterSeconds?:number;challenged?:boolean;diagnostics?:UpstreamDiagnostics};
+export async function httpJson(url: string, init: RequestInit = {}, timeout = 10000): Promise<UpstreamResponse> {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
     const response = await fetch(url, { ...init, signal: init.signal?AbortSignal.any([controller.signal,init.signal]):controller.signal, redirect: 'manual' });
+    const retryAfter=response.headers.get('Retry-After');
+    const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):retryAfter?Math.ceil((Date.parse(retryAfter)-Date.now())/1000):NaN;
+    const result:UpstreamResponse={status:response.status,data:null};
+    if(Number.isSafeInteger(seconds)&&seconds>0)result.retryAfterSeconds=seconds;
+    if(response.status>=400){
+      const safeHeader=(name:string,format:RegExp)=>{
+        const value=response.headers.get(name);
+        return value&&format.test(value)?value:undefined;
+      };
+      result.diagnostics={
+        viaRender:response.headers.get('x-render-origin-server')==='Render',
+        renderRouting:safeHeader('x-render-routing',/^[a-z-]{1,40}$/),
+        renderRequestId:safeHeader('rndr-id',/^[a-f0-9-]{8,40}$/i),
+        rayId:safeHeader('cf-ray',/^[a-f0-9]{16}(?:-[A-Z]{3})?$/)
+      };
+    }
     // A browser challenge is not an OSRM response or a request-rate allowance.
     // Do not parse, log, relay or attempt to solve its HTML/clearance tokens.
     if(response.headers.get('cf-mitigated')==='challenge'){
+      result.challenged=true;
       await response.body?.cancel().catch(()=>undefined);
-      return {status:response.status,data:null,challenged:true};
+      return result;
     }
     if (Number(response.headers.get('content-length')) > 4_000_000) throw new Failure('RESPONSE_TOO_LARGE');
     const reader = response.body?.getReader(); let size = 0; const chunks: Uint8Array[] = [];
@@ -81,10 +100,8 @@ export async function httpJson(url: string, init: RequestInit = {}, timeout = 10
     let raw:Uint8Array;
     if(chunks.length===1)raw=chunks[0];
     else {raw=new Uint8Array(size);let at=0;for(const chunk of chunks){raw.set(chunk,at);at+=chunk.length;}}
-    let data: unknown = null; try { data = JSON.parse(new TextDecoder().decode(raw)); } catch { /* Map HTTP status before invalid body. */ }
-    const retryAfter=response.headers.get('Retry-After');
-    const seconds=retryAfter&&/^\d+$/.test(retryAfter)?Number(retryAfter):retryAfter?Math.ceil((Date.parse(retryAfter)-Date.now())/1000):NaN;
-    return { status: response.status, data,...(response.status>=400?{viaRender:response.headers.has('x-render-origin-server'),viaCloudflare:response.headers.has('cf-ray')}:{ }),...(Number.isFinite(seconds)&&seconds>0?{retryAfterSeconds:seconds}:{}) };
+    try { result.data = JSON.parse(new TextDecoder().decode(raw)); } catch { /* Map HTTP status before invalid body. */ }
+    return result;
   } catch (e) { if (e instanceof Failure) throw e; throw new Failure(controller.signal.aborted ? 'UPSTREAM_TIMEOUT' : 'SERVICE_UNAVAILABLE'); }
   finally { clearTimeout(timer); }
 }

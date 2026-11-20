@@ -1,4 +1,4 @@
-import {it,expect} from 'vitest';
+import {it,expect,vi} from 'vitest';
 import {call,config,external,json} from './helpers';
 it.each([502,503,504])('reports startup HTTP %s as pending readiness, never verified',async status=>{
  const provider=external(()=>json(null,status));
@@ -19,4 +19,29 @@ it('does not hide rate limits or Cloudflare challenges as readiness',async()=>{
  const unused=external(()=>new Response('',{status:403,headers:{'cf-mitigated':'challenge'}}));
  expect(await (await call('/api/navigation/readiness',{}, {env:e})).json()).toEqual({error:'ROAD_PROVIDER_RATE_LIMIT'});expect(unused).not.toHaveBeenCalled();
  expect(await (await call('/api/navigation/readiness',{}, {env:{...e,ROAD_ROUTING_URL:'https://challenge.test'}})).json()).toEqual({error:'ROAD_PROVIDER_CHALLENGE'});
+});
+it('expires a positive probe, honors the shared limit and recovers after Retry-After',async()=>{
+ const time=vi.spyOn(Date,'now').mockReturnValue(100000);
+ try{
+  const env=config({ROAD_ROUTING_URL:'https://expiry.test',SAFE_UPSTREAM_DIAGNOSTICS:'true'});
+  const probe=()=>call('/api/navigation/readiness',{}, {env});
+  const ok=()=>json({code:'Ok',waypoints:[{}]});
+  const provider=external(ok);
+  expect((await probe()).status).toBe(200);
+  time.mockReturnValue(159999);
+  expect((await probe()).status).toBe(200);
+  expect(provider).toHaveBeenCalledOnce();
+  time.mockReturnValue(160000);
+  external(()=>new Response('Busy',{status:429,headers:{'Retry-After':'30','x-render-routing':'hibernate-rate-limited'}}));
+  expect((await probe()).status).toBe(503);
+  const recovered=external(ok);
+  time.mockReturnValue(189001);
+  const limited=await probe();
+  expect(limited.status).toBe(503);
+  expect(limited.headers.get('Retry-After')).toBe('1');
+  expect(recovered).not.toHaveBeenCalled();
+  time.mockReturnValue(190000);
+  expect(await (await probe()).json()).toEqual({ready:true});
+  expect(recovered).toHaveBeenCalledOnce();
+ }finally{time.mockRestore();}
 });

@@ -1,10 +1,22 @@
 import assert from 'node:assert/strict';
-import {waitForRoadService} from '../dist/navigation-readiness.js';
-let calls=0,waits=0,messages=0;
-await waitForRoadService({fetcher:async()=>Response.json(++calls===3?{ready:true}:{ready:false,retryAfterSeconds:20},{status:calls===3?200:202}),wait:async()=>{waits++;},onWaiting:()=>{messages++;}});
-assert.equal(calls,3);assert.equal(waits,2);assert.equal(messages,2);
-calls=0;await assert.rejects(waitForRoadService({fetcher:async()=>{calls++;return Response.json({ready:false},{status:202});},wait:async()=>{}}),/ROAD_PROVIDER_WARMING/);assert.equal(calls,4);
-calls=0;await assert.rejects(waitForRoadService({fetcher:async()=>{calls++;return Response.json({error:'ROAD_PROVIDER_RATE_LIMIT'},{status:503});}}),/ROAD_PROVIDER_RATE_LIMIT/);assert.equal(calls,1);
-const controller=new AbortController();controller.abort();calls=0;
-await assert.rejects(waitForRoadService({signal:controller.signal,fetcher:async()=>{calls++;}}));assert.equal(calls,0);
-console.log('PASS: bounded user-triggered startup checks, readiness validation, no rate-limit retry and cancellation.');
+import {requestRoadVerification,roadRetryMessage} from '../dist/navigation-readiness.js';
+const input={ticket:'test-ticket',vehicleType:'ice'};
+const signal=new AbortController().signal;
+const responses=[
+ Response.json({error:'ROAD_PROVIDER_RATE_LIMIT'},{status:503,headers:{'Retry-After':'30'}}),
+ Response.json({roadVerified:true,navigationTicket:'verified-ticket'})
+];
+let calls=0;
+const fetcher=async(path,options)=>{
+ assert.equal(path,'./api/navigation/verify');
+ assert.equal(options.signal,signal);
+ assert.deepEqual(JSON.parse(options.body),input);
+ return responses[calls++];
+};
+await assert.rejects(requestRoadVerification(input,{fetcher,signal}),{message:'ROAD_PROVIDER_RATE_LIMIT',retryAfterSeconds:30});
+assert.equal(calls,1);
+assert.equal(roadRetryMessage(31000,1500),' 30초 후 다시 시도할 수 있어요.');
+assert.equal(roadRetryMessage(31000,31000),'');
+assert.equal((await requestRoadVerification(input,{fetcher,signal})).navigationTicket,'verified-ticket');
+assert.equal(calls,2);
+console.log('PASS: direct selected-route verification, explicit retry and remaining wait time.');

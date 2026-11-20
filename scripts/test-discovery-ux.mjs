@@ -29,6 +29,6 @@ let loads=0;const data=await(async()=>{globalThis.fetch=async url=>Response.json
 const loader=makeLatestTerrainLoader(()=>{loads++;return data;});await loader.select(local.id,local);await loader.select(local.id,local);assert.equal(loads,1);loader.evict(local.id,local);await loader.select(local.id,local);assert.equal(loads,2,'Only an explicit retry evicts a cached model');
 const none=connectionSection(local,'none',false);assert.doesNotMatch(none,/data-tesla-preview|data-native-route|Tesla 계정/);assert.match(none,/연동 없이 사용/);
 assert.doesNotMatch(connectionSection(local,'pleos',false),/data-native-route|data-tesla-preview/);assert.match(connectionSection(local,'pleos',true),/data-native-route/);
-assert.match(connectionSection(local,'tesla',false,true),/data-tesla-preview/);assert.match(connectionSection(local,'tesla',false,true),/일괄 전송은 지원하지/);assert.doesNotMatch(connectionSection(local,'tesla',false,false),/data-tesla-preview/);
+assert.match(connectionSection(local,'tesla',false,true),/data-tesla-preview/);assert.match(connectionSection(local,'tesla',false,true),/단일 목적지 전송 준비/);assert.doesNotMatch(connectionSection(local,'tesla',false,false),/data-tesla-preview/);
 assert.match(connectionSection(local,'other',false),/data-copy-stops/);assert.doesNotMatch(connectionSection(local,'other',false),/data-tesla-preview/);
 console.log('PASS: all-stop terrain framing, representative clusters, verified-without-geometry separation, DEM sharing/failure/retry, 2D stop sketches and manufacturer-neutral connection contracts.');
